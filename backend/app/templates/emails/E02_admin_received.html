@@ -1,0 +1,37 @@
+{% extends "_base.html" %}
+{% import "_macros.html" as m %}
+{% block body %}
+  <h2 style="margin:0 0 12px 0;color:{{ brand_navy }};font-size:20px;">Landlord admin form received</h2>
+  <p>
+    <strong>{{ landlord_full_name }}</strong> ({{ landlord_email }}) has completed the admin form
+    {% if property_address %}for <strong>{{ property_address }}</strong>{% endif %}.
+  </p>
+
+  {{ m.section("Status snapshot") }}
+  {{ m.kv_table([
+       ("Property",        property_address),
+       ("Gas certificate", gas_status),
+       ("EPC",             epc_status),
+       ("EICR",            eicr_status),
+       ("Service level",   service_level),
+       ("Non-resident landlord", "Yes" if is_nrl else "No"),
+  ]) }}
+
+  {% if warnings %}
+    {{ m.section("Warnings", "#b91c1c") }}
+    {{ m.list_block(warnings, "#b91c1c") }}
+  {% endif %}
+  {% if actions %}
+    {{ m.section("Actions required", "#92400e") }}
+    {{ m.list_block(actions, "#92400e") }}
+  {% endif %}
+  {% if flags %}
+    {{ m.section("For info") }}
+    {{ m.list_block(flags) }}
+  {% endif %}
+
+  {% if submission_fields %}
+    {{ m.section("Full submission") }}
+    {{ m.kv_table(submission_fields) }}
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,19 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.env.local
+node_modules/
+dist/
+.vite/
+*.log
+.DS_Store
+# Claude Code's per-machine worktrees + session state.
+.claude/
+# Transient PDF render artifacts saved at the backend root for inspection.
+backend/*.pdf
+# Runtime user-uploaded files (per-property documents, etc.) — populated by
+# the running app and contain sensitive PII. Exclude the *contents* but keep
+# the directory itself via .gitkeep so the static mount has somewhere to point.
+backend/uploads/*
+!backend/uploads/.gitkeep

@@ -1,0 +1,52 @@
+<h1>Tenancy Agreement</h1>
+<p><strong>Type:</strong> {{ tenancy_type }}</p>
+
+<h2>Parties</h2>
+<table>
+  <tr><th>Landlord</th><td>{{ landlord_full_name }}<br>{{ landlord_address }}<br>{{ landlord_email }}</td></tr>
+  <tr><th>Tenant</th><td>{{ tenant_full_name }}<br>{{ tenant_address }}<br>{{ tenant_email }}</td></tr>
+  <tr><th>Property</th><td>{{ property_address }} ({{ property_post_code }})</td></tr>
+</table>
+
+<h2>Term</h2>
+<p>This tenancy begins on <strong>{{ tenancy_start_date }}</strong>{% if tenancy_end_date and tenancy_end_date != "Periodic" %}
+   and ends on <strong>{{ tenancy_end_date }}</strong>{% else %} and continues on a periodic basis{% endif %}.</p>
+
+<h2>Rent</h2>
+<p>The Tenant will pay rent of <strong>£{{ monthly_rent }}</strong> per calendar month, payable in advance
+   on the same date each month.</p>
+
+<h2>Deposit</h2>
+<p>A deposit of <strong>£{{ deposit_amount }}</strong> has been paid and will be protected in a Government-approved
+   tenancy deposit scheme within 30 days of receipt.</p>
+
+<h2>Tenant obligations</h2>
+<ol>
+  <li>Pay rent on the due date.</li>
+  <li>Keep the Property in a clean and tidy condition.</li>
+  <li>Allow the Landlord or Agent reasonable access on 24 hours' notice.</li>
+  <li>Not to assign or sub-let the Property.</li>
+</ol>
+
+<h2>Landlord obligations</h2>
+<ol>
+  <li>Allow the Tenant quiet enjoyment of the Property.</li>
+  <li>Maintain the structure and exterior in good repair.</li>
+  <li>Maintain in working order installations for water, gas, electricity, sanitation, space heating and water heating.</li>
+</ol>
+
+{% if tenancy_type == "APT" %}
+<h2>APT-specific provisions</h2>
+<p>This tenancy is an Assured Private Tenancy. It is periodic by default. Holding deposit is capped at one
+   week's rent. Rent in advance is limited to one month.</p>
+{% endif %}
+
+<div class="signature-block">
+  <p><strong>Signed by the Landlord:</strong></p>
+  <div class="line"></div>
+  <p>{{ landlord_full_name }} — Date: {{ today }}</p>
+
+  <p><strong>Signed by the Tenant:</strong></p>
+  <div class="line"></div>
+  <p>{{ tenant_full_name }} — Date: {{ today }}</p>
+</div>

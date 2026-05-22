@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Palace Gate — Modern SaaS</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&family=Geist:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0b0f1a;
+    --bg-2: #0e1422;
+    --bg-soft: #131a2b;
+    --card: rgba(255,255,255,0.045);
+    --card-border: rgba(255,255,255,0.08);
+    --card-strong: rgba(255,255,255,0.07);
+    --ink: #e7ecf3;
+    --ink-soft: #a4afc1;
+    --muted: #6b7689;
+    --hairline: rgba(255,255,255,0.08);
+    --accent: #6aa6ff;
+    --accent-2: #b489ff;
+    --gold: #f0c66a;
+    --emerald: #4ec795;
+    --rose: #ff7e83;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background:
+      radial-gradient(1200px 700px at 80% -10%, rgba(106,166,255,0.18), transparent 60%),
+      radial-gradient(900px 500px at -10% 30%, rgba(180,137,255,0.13), transparent 60%),
+      var(--bg);
+    color: var(--ink);
+    font-family: "Geist", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 14.5px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+  h1, h2, h3 { font-family: "Geist", system-ui, sans-serif; margin: 0; letter-spacing: -0.02em; }
+  h1 { font-size: 40px; font-weight: 700; line-height: 1.1; }
+  h2 { font-size: 22px; font-weight: 600; line-height: 1.2; }
+  h3 { font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+  a { color: var(--accent); text-decoration: none; }
+  code, .mono { font-family: "Geist Mono", ui-monospace, monospace; }
+
+  .frame { max-width: 1180px; margin: 0 auto; padding: 32px 36px; }
+
+  /* Top nav — glass */
+  .top {
+    position: sticky; top: 0; z-index: 10;
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    background: rgba(11, 15, 26, 0.6);
+    border-bottom: 1px solid var(--hairline);
+    padding: 14px 36px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand-mark {
+    width: 32px; height: 32px; border-radius: 8px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    display: grid; place-items: center; font-weight: 700; color: white;
+    box-shadow: 0 6px 20px rgba(106,166,255,0.35);
+  }
+  .brand-name { font-weight: 600; }
+  .brand-sub { color: var(--muted); font-size: 12px; }
+  nav.tabs { display: flex; gap: 4px; }
+  nav.tabs a {
+    padding: 7px 14px; border-radius: 8px; color: var(--ink-soft); font-size: 13.5px; font-weight: 500;
+  }
+  nav.tabs a:hover { background: var(--card); color: var(--ink); }
+  nav.tabs a.active { background: rgba(255,255,255,0.08); color: white; }
+  .session-chip {
+    display: inline-flex; align-items: center; gap: 8px; padding: 5px 11px;
+    background: var(--card); border: 1px solid var(--card-border); border-radius: 999px;
+    font-size: 12.5px; color: var(--ink-soft);
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--emerald); box-shadow: 0 0 8px var(--emerald); }
+
+  /* Glass card */
+  .glass {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    padding: 20px;
+  }
+  .glass-strong { background: var(--card-strong); }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .row-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 16px; border-radius: 10px; font-size: 14px; font-weight: 500;
+    background: linear-gradient(180deg, var(--accent), #4d8be8);
+    color: white; border: 1px solid rgba(255,255,255,0.12);
+    box-shadow: 0 6px 18px rgba(77,139,232,0.35), inset 0 1px 0 rgba(255,255,255,0.25);
+    cursor: pointer;
+  }
+  .btn-ghost {
+    background: rgba(255,255,255,0.06); border: 1px solid var(--card-border); color: var(--ink); box-shadow: none;
+  }
+  .btn-gold {
+    background: linear-gradient(180deg, var(--gold), #d49f3a); border-color: rgba(255,255,255,0.18);
+    color: #2a1c00; box-shadow: 0 6px 18px rgba(212,159,58,0.3), inset 0 1px 0 rgba(255,255,255,0.4);
+  }
+
+  /* Pills */
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11.5px; padding: 3px 9px; border-radius: 999px; border: 1px solid;
+  }
+  .pill-clear  { color: var(--emerald); border-color: rgba(78,199,149,0.35); background: rgba(78,199,149,0.10); }
+  .pill-block  { color: var(--rose);    border-color: rgba(255,126,131,0.35); background: rgba(255,126,131,0.10); }
+  .pill-neutral{ color: var(--ink-soft); border-color: var(--hairline); background: rgba(255,255,255,0.03); }
+
+  /* Property list */
+  .props-list { display: grid; grid-template-columns: 1fr; gap: 8px; }
+  .prop-row {
+    display: grid; grid-template-columns: 1.4fr 1fr 1fr 0.8fr 0.7fr 0.6fr auto; gap: 18px;
+    align-items: center; padding: 14px 18px;
+    background: var(--card); border: 1px solid var(--card-border); border-radius: 12px;
+    transition: transform 0.15s, border-color 0.15s;
+  }
+  .prop-row:hover { transform: translateY(-1px); border-color: rgba(255,255,255,0.18); }
+  .prop-row .addr { font-weight: 600; color: var(--ink); }
+  .prop-row .addr-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  /* Hero stats */
+  .hero {
+    background:
+      linear-gradient(135deg, rgba(106,166,255,0.18), rgba(180,137,255,0.10) 60%, transparent 100%),
+      rgba(255,255,255,0.025);
+    border: 1px solid var(--card-border); border-radius: 18px;
+    padding: 36px; position: relative; overflow: hidden;
+  }
+  .hero h1 { background: linear-gradient(135deg, #fff, #b9c8de); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  .hero-lede { color: var(--ink-soft); margin-top: 14px; max-width: 580px; }
+  .hero-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin-top: 28px; }
+  .stat-card { padding: 18px; border-radius: 12px; background: rgba(255,255,255,0.04); border: 1px solid var(--card-border); }
+  .stat-num { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+  .stat-lbl { font-size: 12px; color: var(--muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.08em; }
+
+  /* Pipeline */
+  .pipeline { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    padding: 7px 12px; border-radius: 8px; font-size: 12.5px; font-weight: 500;
+    background: rgba(255,255,255,0.04); border: 1px solid var(--card-border); color: var(--ink-soft);
+  }
+  .chip.done { background: rgba(78,199,149,0.08); border-color: rgba(78,199,149,0.25); color: var(--emerald); }
+  .chip.current {
+    background: linear-gradient(180deg, var(--accent), #4d8be8);
+    border-color: rgba(255,255,255,0.18); color: white;
+    box-shadow: 0 6px 18px rgba(77,139,232,0.35);
+  }
+  .chip.viewing { box-shadow: 0 0 0 2px rgba(240,198,106,0.5), 0 6px 18px rgba(77,139,232,0.25); }
+  .arrow { color: var(--muted); margin: 0 -2px; font-size: 11px; }
+
+  /* Stage card */
+  .stage-card { padding: 22px; }
+  .stage-card .kv { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px dashed var(--hairline); font-size: 13.5px; }
+  .stage-card .kv:last-child { border-bottom: 0; }
+  .kv .k { color: var(--muted); }
+  .kv .v { color: var(--ink); }
+
+  /* Editor */
+  .editor-shell { display: grid; grid-template-columns: 1fr 320px; gap: 18px; }
+  .doc-paper {
+    background: white; color: #1f2937; padding: 56px 64px; border-radius: 14px;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.5);
+    font-family: "Geist", system-ui, sans-serif; min-height: 480px; line-height: 1.7;
+  }
+  .doc-paper h2 { color: var(--accent); font-weight: 700; }
+  .doc-paper .seal { display:inline-block; font-size: 11px; letter-spacing:0.18em; text-transform:uppercase; color: var(--accent-2); border-top: 2px solid var(--accent-2); padding-top: 6px; }
+  .merge-token { background: rgba(106,166,255,0.15); color: #2c5fa3; padding: 1px 5px; border-radius: 4px; font-family: "Geist Mono", ui-monospace, monospace; font-size: 13px; }
+
+  .sec-divider { font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); padding: 28px 0 14px; text-align: center; }
+  .footer-note { color: var(--muted); font-size: 12px; margin-top: 16px; text-align: center; padding-bottom: 40px; }
+</style>
+</head>
+<body>
+
+<!-- TOP NAV -->
+<header class="top">
+  <div class="brand">
+    <div class="brand-mark">PG</div>
+    <div>
+      <div class="brand-name">Palace Gate</div>
+      <div class="brand-sub">Lettings OS</div>
+    </div>
+  </div>
+  <nav class="tabs">
+    <a href="#" class="active">Dashboard</a>
+    <a href="#">Library</a>
+    <a href="#">New property</a>
+  </nav>
+  <div class="session-chip"><span class="dot"></span> admin@palacegate.com</div>
+</header>
+
+<!-- PAGE: DASHBOARD -->
+<div class="frame">
+  <section class="hero">
+    <h1>Welcome back, Asad.</h1>
+    <p class="hero-lede">Ten active properties under management. Three need attention today — gate-blocked listings and a referencing outcome to record.</p>
+    <div class="hero-stats">
+      <div class="stat-card"><div class="stat-num">10</div><div class="stat-lbl">Properties</div></div>
+      <div class="stat-card"><div class="stat-num">2</div><div class="stat-lbl">Gate-blocked</div></div>
+      <div class="stat-card"><div class="stat-num">5</div><div class="stat-lbl">In referencing</div></div>
+      <div class="stat-card"><div class="stat-num">£24.6k</div><div class="stat-lbl">Monthly pipeline</div></div>
+    </div>
+  </section>
+
+  <div style="display:flex; align-items:center; justify-content:space-between; margin: 28px 0 14px;">
+    <h2>Properties</h2>
+    <div style="display:flex; gap:8px;">
+      <a class="btn btn-ghost" href="#">Newest first</a>
+      <a class="btn btn-gold" href="#">+ New property</a>
+    </div>
+  </div>
+
+  <div class="props-list">
+    <div class="prop-row">
+      <div>
+        <div class="addr">12 Test Mews, London</div>
+        <div class="addr-sub">SW1A 1AA · Property #74</div>
+      </div>
+      <div class="mono" style="color: var(--ink-soft); font-size: 13px;">APT</div>
+      <div class="mono" style="color: var(--ink-soft); font-size: 13px;">Let Only</div>
+      <div><span class="pill pill-neutral">Stage 5 · Referencing</span></div>
+      <div><span class="pill pill-clear">● Clear</span></div>
+      <div class="mono" style="color: var(--muted); font-size: 12px;">15 May 26</div>
+      <a class="btn btn-ghost" href="#" style="padding:6px 12px; font-size:13px;">Open →</a>
+    </div>
+    <div class="prop-row">
+      <div>
+        <div class="addr">7 Broadwalk, Kensington</div>
+        <div class="addr-sub">W8 6JJ · Property #73</div>
+      </div>
+      <div class="mono" style="color: var(--ink-soft); font-size: 13px;">Common Law</div>
+      <div class="mono" style="color: var(--ink-soft); font-size: 13px;">Full Mgmt</div>
+      <div><span class="pill pill-neutral">Stage 2 · Compliance</span></div>
+      <div><span class="pill pill-block">● Blocked</span></div>
+      <div class="mono" style="color: var(--muted); font-size: 12px;">14 May 26</div>
+      <a class="btn btn-ghost" href="#" style="padding:6px 12px; font-size:13px;">Open →</a>
+    </div>
+    <div class="prop-row">
+      <div>
+        <div class="addr">Flat 4, Cheval Place</div>
+        <div class="addr-sub">SW7 1ER · Property #72</div>
+      </div>
+      <div class="mono" style="color: var(--ink-soft); font-size: 13px;">APT</div>
+      <div class="mono" style="color: var(--ink-soft); font-size: 13px;">Rent Coll.</div>
+      <div><span class="pill pill-neutral">Stage 7 · Pre Move-in</span></div>
+      <div><span class="pill pill-clear">● Clear</span></div>
+      <div class="mono" style="color: var(--muted); font-size: 12px;">12 May 26</div>
+      <a class="btn btn-ghost" href="#" style="padding:6px 12px; font-size:13px;">Open →</a>
+    </div>
+  </div>
+</div>
+
+<div class="sec-divider">↓ Property detail</div>
+
+<!-- PAGE: PROPERTY DETAIL -->
+<div class="frame">
+  <a href="#" style="font-size: 13px; color: var(--ink-soft);">← All properties</a>
+  <div style="display:flex; align-items:flex-end; justify-content:space-between; margin: 8px 0 18px;">
+    <div>
+      <h1>12 Test Mews, London</h1>
+      <p style="color: var(--ink-soft); margin-top: 6px;">SW1A 1AA · Assured Periodic Tenancy · Let Only</p>
+    </div>
+    <a class="btn btn-ghost" href="#">Open flow board →</a>
+  </div>
+
+  <div class="glass" style="padding: 18px;">
+    <div class="pipeline">
+      <span class="chip done">1 Take-on</span><span class="arrow">›</span>
+      <span class="chip done">2 Compliance</span><span class="arrow">›</span>
+      <span class="chip done">3 Marketing</span><span class="arrow">›</span>
+      <span class="chip done">4 Offer</span><span class="arrow">›</span>
+      <span class="chip current viewing">5 Referencing</span><span class="arrow">›</span>
+      <span class="chip">6 TA Signing</span><span class="arrow">›</span>
+      <span class="chip">7 Pre Move-in</span><span class="arrow">›</span>
+      <span class="chip">8 Live Tenancy</span><span class="arrow">›</span>
+      <span class="chip">9 End</span>
+    </div>
+    <p style="margin-top: 14px; font-size: 12.5px; color: var(--muted);">Property is at stage <strong style="color:var(--ink);">5</strong>. Viewing stage 5 (current).</p>
+  </div>
+
+  <div class="row" style="margin-top: 16px;">
+    <div class="glass stage-card">
+      <h3 style="margin-bottom: 12px;">Paragon referencing</h3>
+      <div class="kv"><span class="k">Test Tenant</span><span class="v"><span class="pill pill-clear">Pass</span></span></div>
+      <div class="kv"><span class="k">Paragon ref</span><span class="v mono">PRG-MOCK-19212606</span></div>
+      <div class="kv"><span class="k">Landlord approved</span><span class="v" style="color: var(--emerald);">✓ Yes</span></div>
+      <div style="margin-top: 14px;"><a class="btn" href="#">Send TA from library →</a></div>
+    </div>
+    <div class="glass stage-card">
+      <h3 style="margin-bottom: 12px;">Documents sent at this stage</h3>
+      <div class="kv">
+        <span><div class="v">TPL-06 Referencing Request</div><div class="k" style="font-size:12px;">14 May · Email</div></span>
+        <a href="#" style="font-size: 12px;">View →</a>
+      </div>
+      <div class="kv">
+        <span><div class="v">PG T&amp;C 2026</div><div class="k" style="font-size:12px;">14 May · Signed</div></span>
+        <a href="#" style="font-size: 12px;">View PDF →</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="sec-divider">↓ Document editor</div>
+
+<!-- PAGE: LIBRARY EDITOR -->
+<div class="frame">
+  <a href="#" style="font-size: 13px; color: var(--ink-soft);">← Property</a>
+  <div style="display:flex; align-items:flex-end; justify-content:space-between; margin: 8px 0 14px;">
+    <div>
+      <h2 style="font-size: 28px; font-weight: 700;">TPL-05 · Offer Confirmation to Landlord</h2>
+      <p style="color: var(--ink-soft); margin-top: 4px;">Editing per-property send · merge fields interpolated at send time</p>
+    </div>
+  </div>
+
+  <div class="editor-shell">
+    <div class="doc-paper">
+      <span class="seal">Palace Gate Lettings</span>
+      <h2 style="margin-top: 16px;">Offer Confirmation</h2>
+      <p style="color: #6b7280; font-size: 13px; margin-bottom: 24px;">16 May 2026</p>
+      <p>Dear <span class="merge-token">{{landlord_full_name}}</span>,</p>
+      <p>Re: <strong><span class="merge-token">{{property_address}}</span></strong></p>
+      <p>We are pleased to confirm receipt of a formal offer for the above property from <span class="merge-token">{{tenant_full_name}}</span>.</p>
+      <p>Initial rent: <strong>£<span class="merge-token">{{monthly_rent}}</span> pcm</strong>. Deposit: <strong>£<span class="merge-token">{{deposit_amount}}</span></strong>. Start: <span class="merge-token">{{tenancy_start_date}}</span> (periodic, RRA 2025).</p>
+      <p>Kindly confirm acceptance so we may instruct Paragon for referencing.</p>
+      <p style="margin-top: 24px;">Yours sincerely,</p>
+      <p><strong>Palace Gate Lettings</strong></p>
+    </div>
+    <aside>
+      <div class="glass" style="padding: 16px;">
+        <h3 style="margin-bottom: 10px;">How to send</h3>
+        <label style="display:flex; gap:8px; padding: 8px 0; cursor:pointer;"><input type="radio" name="m" /> <span>Send for signature</span></label>
+        <label style="display:flex; gap:8px; padding: 8px 0; cursor:pointer;"><input type="radio" name="m" checked /> <span>Email as PDF</span></label>
+        <label style="display:flex; gap:8px; padding: 8px 0; cursor:pointer;"><input type="radio" name="m" /> <span>Send as email</span></label>
+      </div>
+      <div class="glass" style="padding: 16px; margin-top: 12px;">
+        <h3 style="margin-bottom: 10px;">Merge fields</h3>
+        <div style="display:flex; flex-wrap:wrap; gap: 6px;">
+          <span class="chip" style="font-size:11px; padding: 4px 8px;">Landlord name</span>
+          <span class="chip" style="font-size:11px; padding: 4px 8px;">Property address</span>
+          <span class="chip" style="font-size:11px; padding: 4px 8px;">Monthly rent</span>
+          <span class="chip" style="font-size:11px; padding: 4px 8px;">Tenant name</span>
+        </div>
+      </div>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px;">
+        <a class="btn btn-ghost" style="justify-content:center;" href="#">Preview</a>
+        <a class="btn btn-gold" style="justify-content:center;" href="#">Send PDF</a>
+      </div>
+    </aside>
+  </div>
+
+  <p class="footer-note">Variation B · Modern SaaS · Geist + glass cards · dark</p>
+</div>
+
+</body>
+</html>

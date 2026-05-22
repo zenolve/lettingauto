@@ -1,0 +1,30 @@
+<h1>Offer Letter</h1>
+<p>Dated: {{ today }}</p>
+<p>To: <strong>{{ landlord_full_name }}</strong><br>{{ landlord_address }}</p>
+
+<p>Dear {{ landlord_full_name }},</p>
+
+<p>We are pleased to put forward the following offer for your consideration:</p>
+
+<table>
+  <tr><th>Property</th><td>{{ property_address }}</td></tr>
+  <tr><th>Prospective tenant</th><td>{{ tenant_full_name }}</td></tr>
+  <tr><th>Tenancy term</th><td>{{ tenancy_term }}</td></tr>
+  <tr><th>Start date</th><td>{{ tenancy_start_date }}</td></tr>
+  <tr><th>End date</th><td>{{ tenancy_end_date }}</td></tr>
+  <tr><th>Monthly rent</th><td>£{{ monthly_rent }}</td></tr>
+  <tr><th>Deposit</th><td>£{{ deposit_amount }}</td></tr>
+  <tr><th>Holding deposit</th><td>£{{ holding_deposit }}</td></tr>
+</table>
+
+<p>By signing below you accept the above offer and authorise us to proceed with referencing, the drafting
+   of the tenancy agreement and the registration of the deposit with an approved scheme.</p>
+
+<p>Subject to satisfactory references and right-to-rent checks, the tenancy will commence on the start
+   date stated above.</p>
+
+<div class="signature-block">
+  <p><strong>Accepted by:</strong></p>
+  <div class="line"></div>
+  <p>{{ landlord_full_name }} — Date: {{ today }}</p>
+</div>

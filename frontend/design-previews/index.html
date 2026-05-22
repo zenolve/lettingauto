@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Palace Gate — Design Variations</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: #f7f5f0;
+    font-family: "Inter", system-ui, sans-serif;
+    color: #15171a;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1 { font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 48px; line-height: 1.05; letter-spacing: -0.02em; margin: 0; }
+  h2 { font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 22px; line-height: 1.2; margin: 0 0 4px 0; }
+  .frame { max-width: 1300px; margin: 0 auto; padding: 48px 36px 80px; }
+  .intro { max-width: 720px; }
+  .intro p { color: #4b5057; font-size: 16px; }
+  .kicker { font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase; color: #8a8f96; margin-bottom: 14px; }
+
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 40px; }
+  .card {
+    background: white; border: 1px solid #e3ddd2; border-radius: 12px; overflow: hidden;
+    display: flex; flex-direction: column; transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .card:hover { transform: translateY(-3px); box-shadow: 0 18px 40px rgba(0,0,0,0.08); }
+  .swatch {
+    aspect-ratio: 4/3; display: grid; place-items: center; color: white; font-size: 14px;
+    position: relative; overflow: hidden;
+  }
+  .swatch-A {
+    background: #faf7f2; color: #15171a;
+    background-image:
+      linear-gradient(rgba(0,0,0,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,0,0,0.04) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+  .swatch-B {
+    background:
+      radial-gradient(700px 400px at 80% -10%, rgba(106,166,255,0.45), transparent 60%),
+      radial-gradient(500px 300px at -10% 30%, rgba(180,137,255,0.4), transparent 60%),
+      #0b0f1a;
+  }
+  .swatch-C {
+    background: #f4f1ec; color: #0a0a0a;
+    background-image:
+      repeating-linear-gradient(0deg, transparent, transparent 22px, #d8d3ca 22px, #d8d3ca 23px),
+      repeating-linear-gradient(90deg, transparent, transparent 22px, #d8d3ca 22px, #d8d3ca 23px);
+  }
+  .swatch .preview-title {
+    position: relative; padding: 16px 20px; background: rgba(0,0,0,0.0);
+  }
+  .swatch-A .preview-title { font-family: "Fraunces"; font-size: 38px; font-weight: 600; letter-spacing: -0.01em; }
+  .swatch-B .preview-title { font-family: "Inter"; font-size: 32px; font-weight: 700; background: linear-gradient(135deg, #fff, #b9c8de); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  .swatch-C .preview-title { font-family: Georgia, serif; font-size: 38px; font-weight: 700; color: #0a0a0a; }
+  .swatch .accent {
+    position: absolute; left: 20px; right: 20px; bottom: 20px;
+    display: flex; gap: 10px; align-items: center;
+  }
+  .swatch .pill { font-size: 11px; padding: 4px 10px; border-radius: 999px; background: rgba(255,255,255,0.92); color: #15171a; border: 1px solid rgba(0,0,0,0.08); }
+  .swatch-A .accent .pill { background: #fff; }
+  .swatch-B .accent .pill { background: rgba(255,255,255,0.10); color: white; border-color: rgba(255,255,255,0.18); backdrop-filter: blur(8px); }
+  .swatch-C .accent .pill { background: white; border: 2px solid #0a0a0a; border-radius: 0; }
+  .swatch .dot { width: 30px; height: 4px; }
+  .swatch-A .dot { background: #ad8b3a; }
+  .swatch-B .dot { background: linear-gradient(90deg, #6aa6ff, #b489ff); }
+  .swatch-C .dot { background: #ff5400; }
+
+  .meta { padding: 22px 24px 24px; flex: 1; display: flex; flex-direction: column; }
+  .meta .name { font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: #8a8f96; }
+  .meta .desc { color: #4b5057; font-size: 14px; margin: 8px 0 16px; flex: 1; }
+  .meta dl { margin: 0 0 18px 0; }
+  .meta dl div { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed #e3ddd2; font-size: 13px; }
+  .meta dl div:last-child { border-bottom: 0; }
+  .meta dl dt { color: #8a8f96; }
+  .meta dl dd { margin: 0; color: #15171a; }
+  .open-btn {
+    display: inline-block; padding: 9px 16px; background: #15171a; color: white; text-decoration: none;
+    border-radius: 6px; font-weight: 500; font-size: 14px;
+  }
+  .open-btn:hover { background: #2b2b2b; }
+
+  .matrix { margin-top: 64px; }
+  table.cmp { width: 100%; border-collapse: collapse; background: white; border: 1px solid #e3ddd2; border-radius: 12px; overflow: hidden; }
+  table.cmp th, table.cmp td { padding: 14px 18px; text-align: left; font-size: 14px; border-bottom: 1px solid #e9e4d8; }
+  table.cmp thead th { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: #8a8f96; font-weight: 500; background: #faf7f2; }
+  table.cmp tbody tr:last-child td { border-bottom: 0; }
+  table.cmp td:first-child { color: #8a8f96; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
+
+  .note { color: #6c6c6c; font-size: 13px; margin-top: 28px; }
+</style>
+</head>
+<body>
+
+<div class="frame">
+  <div class="intro">
+    <div class="kicker">Design exploration</div>
+    <h1>Three directions for the<br/>Palace Gate frontend.</h1>
+    <p style="margin-top: 18px;">
+      Same three pages — Dashboard, Property detail, Document editor — rendered in three different visual languages.
+      Pick one or mix elements. All three keep the existing nine-stage pipeline, gate-status pills, and library / send-mode patterns; only the typography, palette and surfacing changes.
+    </p>
+  </div>
+
+  <div class="grid">
+    <!-- Variation A -->
+    <article class="card">
+      <a href="A_editorial.html" target="_blank" class="swatch swatch-A">
+        <div class="preview-title">Properties.</div>
+        <div class="accent">
+          <span class="dot"></span>
+          <span class="pill">Fraunces · Inter</span>
+        </div>
+      </a>
+      <div class="meta">
+        <div class="name">Variation A</div>
+        <h2>Editorial</h2>
+        <p class="desc">
+          Serif headlines, generous whitespace, cream paper. Reads like a property-market title.
+          Best fit for a prime-Kensington brand that wants to feel established, not loud.
+        </p>
+        <dl>
+          <div><dt>Heading</dt><dd>Fraunces (variable serif)</dd></div>
+          <div><dt>Body</dt><dd>Inter</dd></div>
+          <div><dt>Palette</dt><dd>Cream / navy / gold</dd></div>
+          <div><dt>Mode</dt><dd>Light only</dd></div>
+          <div><dt>Vibe</dt><dd>Magazine, refined, slow</dd></div>
+        </dl>
+        <a class="open-btn" href="A_editorial.html" target="_blank">Open variation A →</a>
+      </div>
+    </article>
+
+    <!-- Variation B -->
+    <article class="card">
+      <a href="B_modern_saas.html" target="_blank" class="swatch swatch-B">
+        <div class="preview-title">Welcome back, Asad.</div>
+        <div class="accent">
+          <span class="dot"></span>
+          <span class="pill">Geist · Glass</span>
+        </div>
+      </a>
+      <div class="meta">
+        <div class="name">Variation B</div>
+        <h2>Modern SaaS</h2>
+        <p class="desc">
+          Dark background, glass cards, subtle gradients, Geist throughout.
+          Feels like a fintech / property-ops tool — denser, faster scan, hero-stat first.
+        </p>
+        <dl>
+          <div><dt>Heading</dt><dd>Geist (700)</dd></div>
+          <div><dt>Body</dt><dd>Geist</dd></div>
+          <div><dt>Palette</dt><dd>Navy / blue · violet accents</dd></div>
+          <div><dt>Mode</dt><dd>Dark first (light variant possible)</dd></div>
+          <div><dt>Vibe</dt><dd>Operational, dashboard-y</dd></div>
+        </dl>
+        <a class="open-btn" href="B_modern_saas.html" target="_blank">Open variation B →</a>
+      </div>
+    </article>
+
+    <!-- Variation C -->
+    <article class="card">
+      <a href="C_brutalist_pro.html" target="_blank" class="swatch swatch-C">
+        <div class="preview-title">Properties.</div>
+        <div class="accent">
+          <span class="dot"></span>
+          <span class="pill">IBM Plex · Bold</span>
+        </div>
+      </a>
+      <div class="meta">
+        <div class="name">Variation C</div>
+        <h2>Brutalist Pro</h2>
+        <p class="desc">
+          Hard black rules, monospace metadata, a burnt-orange accent. Big serif headlines.
+          Confident and unfashionable in a good way — closer to a working architect's office than a marketing site.
+        </p>
+        <dl>
+          <div><dt>Heading</dt><dd>IBM Plex Serif</dd></div>
+          <div><dt>Body</dt><dd>IBM Plex Sans</dd></div>
+          <div><dt>Mono</dt><dd>IBM Plex Mono (metadata)</dd></div>
+          <div><dt>Palette</dt><dd>Off-white / black / burnt-orange</dd></div>
+          <div><dt>Vibe</dt><dd>Editorial-brutalist, dense</dd></div>
+        </dl>
+        <a class="open-btn" href="C_brutalist_pro.html" target="_blank">Open variation C →</a>
+      </div>
+    </article>
+  </div>
+
+  <section class="matrix">
+    <div class="kicker">Side-by-side</div>
+    <h2 style="font-size: 26px;">What they cost you on the way in</h2>
+
+    <table class="cmp" style="margin-top: 18px;">
+      <thead>
+        <tr>
+          <th>Dimension</th>
+          <th>A · Editorial</th>
+          <th>B · Modern SaaS</th>
+          <th>C · Brutalist Pro</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Information density</td>
+          <td>Low — long-form feel</td>
+          <td>Medium</td>
+          <td>High — dense tables</td>
+        </tr>
+        <tr>
+          <td>Brand fit (prime-Kensington lettings)</td>
+          <td>★★★★★</td>
+          <td>★★★</td>
+          <td>★★★★</td>
+        </tr>
+        <tr>
+          <td>Agent speed (daily ops)</td>
+          <td>★★★</td>
+          <td>★★★★★</td>
+          <td>★★★★</td>
+        </tr>
+        <tr>
+          <td>Implementation cost from today's frontend</td>
+          <td>Low — recolour + font swap</td>
+          <td>Medium — dark mode + glass utilities</td>
+          <td>Low/medium — type swap + rule weights</td>
+        </tr>
+        <tr>
+          <td>Tailwind extras needed</td>
+          <td>Custom font family</td>
+          <td><code>backdrop-blur</code>, dark variants</td>
+          <td>Mono font, sharper borders</td>
+        </tr>
+        <tr>
+          <td>Print / PDF feel</td>
+          <td>Excellent (already paper-like)</td>
+          <td>Needs light export shell</td>
+          <td>Excellent</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p class="note">
+      Recommendation: A or C suits the brand better. A is the safer / more obviously premium choice; C is the more distinctive option.
+      B is the right call if the priority is operator speed and the audience is the agent rather than the landlord.
+      Mix-and-match is also fine — e.g. A's typography on B's hero-stat layout.
+    </p>
+  </section>
+</div>
+
+</body>
+</html>

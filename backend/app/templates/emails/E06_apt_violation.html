@@ -1,0 +1,8 @@
+{% extends "_base.html" %}
+{% import "_macros.html" as m %}
+{% block body %}
+  <h2 style="margin:0 0 12px 0;color:#7f1d1d;">APT violation — property blocked</h2>
+  <p><strong>{{ property_address }}</strong></p>
+  {{ m.list_block(violations, "#b91c1c") }}
+  <p>The tenant record has NOT been created. Please address the violations and re-submit.</p>
+{% endblock %}

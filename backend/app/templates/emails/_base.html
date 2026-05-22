@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{% block title %}{{ brand_name }}{% endblock %}</title>
+</head>
+<body style="margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;background:#f4f6fb;color:#1f2937;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6fb;padding:24px 0;">
+    <tr><td align="center">
+      <table role="presentation" width="640" cellpadding="0" cellspacing="0"
+             style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08);">
+        <tr>
+          <td style="background:{{ brand_navy }};padding:20px 28px;">
+            <div style="color:#ffffff;font-size:20px;font-weight:700;letter-spacing:0.4px;">
+              {{ brand_name }}
+            </div>
+            <div style="color:#dbe5f6;font-size:12px;margin-top:4px;">PropTech notification</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:28px;">
+            {% block body %}{% endblock %}
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:16px 28px;background:#f8fafc;color:#6b7280;font-size:11px;border-top:1px solid #e5e7eb;">
+            Sent automatically by the {{ brand_name }} PropTech system. Do not reply.
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>

@@ -1,0 +1,30 @@
+{% extends "_base.html" %}
+{% import "_macros.html" as m %}
+{% block body %}
+  <h2 style="margin:0 0 12px 0;color:{{ brand_navy }};font-size:20px;">Offer received</h2>
+  <p><strong>{{ property_address }}</strong> · {{ tenancy_type }}</p>
+
+  {{ m.section("Offer details") }}
+  {{ m.kv_table([
+       ("Tenant",         payload.get("tenant_full_name")),
+       ("Tenant email",   payload.get("tenant_email")),
+       ("Start date",     payload.get("start_date")),
+       ("End date",       payload.get("end_date") or "Periodic"),
+       ("Monthly rent",   "£%.2f"|format(payload.get("monthly_rent", 0))),
+       ("Deposit",        "£%.2f"|format(payload.get("deposit_amount", 0))),
+       ("Holding deposit","£%.2f"|format(payload.get("holding_deposit", 0))),
+       ("Occupants",      payload.get("number_of_occupants")),
+       ("HMO",            "Yes" if hmo else "No"),
+  ]) }}
+
+  {% if docuseal_url %}
+    <p style="margin:20px 0;">
+      <a href="{{ docuseal_url }}" style="background:{{ brand_navy }};color:#ffffff;
+         text-decoration:none;padding:12px 22px;border-radius:6px;font-weight:600;">
+        View DocuSeal Offer Letter
+      </a>
+    </p>
+  {% endif %}
+
+  {% if flags %}{{ m.section("Flags") }}{{ m.list_block(flags) }}{% endif %}
+{% endblock %}

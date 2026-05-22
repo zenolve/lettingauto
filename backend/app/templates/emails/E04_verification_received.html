@@ -1,0 +1,19 @@
+{% extends "_base.html" %}
+{% import "_macros.html" as m %}
+{% block body %}
+  <h2 style="margin:0 0 12px 0;color:{{ brand_navy }};font-size:20px;">Verification submission received</h2>
+  <p>Path: <strong>{{ "Company" if is_company else "Individual" }}</strong>
+     · Residency: <strong>{{ "Overseas" if is_overseas else "UK Resident" }}</strong></p>
+
+  {{ m.section("Documents received") }}
+  {{ m.kv_table([
+       ("ID document",        payload.get("id_document_upload")),
+       ("Address document",   payload.get("address_doc_upload")),
+       ("Ownership document", payload.get("ownership_doc_upload")),
+       ("Incorporation",      payload.get("certificate_of_incorporation")),
+       ("Bank statements",    payload.get("bank_statements_upload")),
+       ("Source of funds",    payload.get("source_of_funds")),
+  ]) }}
+
+  {% if actions %}{{ m.section("Actions") }}{{ m.list_block(actions) }}{% endif %}
+{% endblock %}

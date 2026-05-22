@@ -1,0 +1,7 @@
+{% extends "_base.html" %}
+{% import "_macros.html" as m %}
+{% block body %}
+  <h2 style="margin:0 0 12px 0;color:#7f1d1d;">Gate blocked — Stage {{ target_stage }}</h2>
+  <p><strong>{{ property_address }}</strong></p>
+  {{ m.list_block(failures, "#b91c1c") }}
+{% endblock %}

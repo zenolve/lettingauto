@@ -1,0 +1,24 @@
+{% extends "_base.html" %}
+{% import "_macros.html" as m %}
+{% block body %}
+  <div style="background:#fee2e2;border:1px solid #b91c1c;border-radius:6px;padding:14px;margin-bottom:18px;">
+    <strong style="color:#7f1d1d;">⚠ Enhanced Due Diligence required</strong><br>
+    <span style="color:#7f1d1d;">Source of funds: <em>{{ payload.get("source_of_funds") }}</em>.
+    This submission has been flagged for enhanced review. Verification Status set to
+    <strong>Pending Enhanced Review</strong>.</span>
+  </div>
+
+  <h2 style="margin:0 0 12px 0;color:{{ brand_navy }};font-size:20px;">Verification submission received</h2>
+  <p>Path: <strong>{{ "Company" if is_company else "Individual" }}</strong>
+     · Residency: <strong>{{ "Overseas" if is_overseas else "UK Resident" }}</strong></p>
+
+  {{ m.section("Documents received") }}
+  {{ m.kv_table([
+       ("ID document",        payload.get("id_document_upload")),
+       ("Address document",   payload.get("address_doc_upload")),
+       ("Ownership document", payload.get("ownership_doc_upload")),
+       ("Incorporation",      payload.get("certificate_of_incorporation")),
+       ("Bank statements",    payload.get("bank_statements_upload")),
+       ("Source of funds",    payload.get("source_of_funds")),
+  ]) }}
+{% endblock %}

@@ -1,0 +1,139 @@
+"""Internal form submission endpoints — these REPLACE the Tally forms.
+
+The React frontend POSTs to these. They dispatch into the same handlers that
+the legacy Tally webhooks use, so business logic stays in one place.
+
+Public form routes (`POST /api/forms/landlord-*`) require a form token that
+encodes the property + form + landlord email so we can match the submission
+back to the right Airtable record.
+"""
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+
+from app.core.auth import Agent, decode_form_token, require_agent
+from app.handlers.pg01_takeon import handle_takeon
+from app.handlers.pg02_admin import handle_admin
+from app.handlers.pg02b_verification import handle_verification
+from app.handlers.pg03_offer import handle_offer
+from app.handlers.pg05_tenant_pack import handle_tenant_pack
+from app.handlers.pg06_scheduler import run_scheduler
+from app.handlers.pg07_rra_batch import handle_rra_batch
+from app.models.common import (
+    LandlordAdminInput,
+    LandlordVerificationInput,
+    OfferInput,
+    PropertyTakeonInput,
+)
+
+router = APIRouter(prefix="/api/forms", tags=["forms"])
+
+
+# ---------------------------------------------------------------------------
+# Agent-protected
+# ---------------------------------------------------------------------------
+@router.post("/property-takeon", status_code=status.HTTP_201_CREATED)
+async def submit_property_takeon(
+    payload: PropertyTakeonInput,
+    _: Agent = Depends(require_agent),
+) -> dict:
+    return await handle_takeon(payload)
+
+
+def _derive_current_stage_for_check(property_id: str) -> int:
+    """Lightweight stage derivation for the stage-gate guard.
+
+    Mirrors `app.routers.properties._derive_current_stage` but inline to avoid
+    a circular import. Kept in sync by hand — see also frontend/src/lib/stages.ts.
+    """
+    from app.db import airtable_client as at  # local import — avoid load-time cycles
+    try:
+        prop = at.get(at.TableNames.PROPERTIES, property_id)
+    except Exception:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Property not found")
+    f = prop.get("fields", {})
+    tenant = bool(f.get("Tenant"))
+    if f.get("TA_LL_Signed") and f.get("TA_TT_Signed"):
+        return 8
+    if tenant and (f.get("TA_LL_Signed") or f.get("TA_TT_Signed")):
+        return 7
+    if tenant and f.get("LL_Offer_Accepted"):
+        return 6
+    if tenant:
+        return 5
+    if f.get("TC_Signed"):
+        return 4
+    certs_ok = all(f.get(k) in ("On File", "Palace Gate Arranging") for k in ("Gas_Cert_Status", "EPC_Status", "EICR_Status"))
+    if certs_ok:
+        return 3
+    if bool(f.get("Landlords")) and any(f.get(k) for k in ("Gas_Cert_Status", "EPC_Status", "EICR_Status")):
+        return 2
+    return 1
+
+
+def _require_stage(property_id: str, required: int, action: str) -> None:
+    """Raise 409 Conflict if the property hasn't reached `required` yet."""
+    current = _derive_current_stage_for_check(property_id)
+    if current < required:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"Property is at stage {current}; '{action}' requires stage {required}. "
+            f"Resolve the earlier stages first.",
+        )
+
+
+@router.post("/offer/{property_id}", status_code=status.HTTP_201_CREATED)
+async def submit_offer(
+    property_id: str,
+    payload: OfferInput,
+    _: Agent = Depends(require_agent),
+) -> dict:
+    _require_stage(property_id, required=4, action="Record offer")
+    return await handle_offer(property_id, payload)
+
+
+@router.post("/tenant-pack/{property_id}")
+async def submit_tenant_pack(
+    property_id: str,
+    _: Agent = Depends(require_agent),
+) -> dict:
+    _require_stage(property_id, required=7, action="Send tenant pack")
+    return await handle_tenant_pack(property_id)
+
+
+@router.post("/scheduler/run")
+async def submit_scheduler_run(
+    token: str = Query(...),
+    _: Agent | None = None,
+) -> dict:
+    # Cron-callable: protected by a shared secret rather than agent JWT.
+    from app.config import settings
+    if token != settings.scheduler_internal_token:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Invalid scheduler token")
+    return await run_scheduler()
+
+
+@router.post("/rra-batch")
+async def submit_rra_batch(_: Agent = Depends(require_agent)) -> dict:
+    return await handle_rra_batch()
+
+
+# ---------------------------------------------------------------------------
+# Public — token-protected
+# ---------------------------------------------------------------------------
+@router.post("/landlord-admin", status_code=status.HTTP_201_CREATED)
+async def submit_landlord_admin(
+    payload: LandlordAdminInput,
+    token: str = Query(...),
+) -> dict:
+    tok = decode_form_token(token, expected_form="landlord_admin")
+    return await handle_admin(tok.property_id, payload)
+
+
+@router.post("/landlord-verification", status_code=status.HTTP_201_CREATED)
+async def submit_landlord_verification(
+    payload: LandlordVerificationInput,
+    token: str = Query(...),
+) -> dict:
+    tok = decode_form_token(token, expected_form="landlord_verification")
+    return await handle_verification(tok.property_id, tok.email, payload)

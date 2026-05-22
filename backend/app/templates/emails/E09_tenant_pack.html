@@ -1,0 +1,22 @@
+{% extends "_base.html" %}
+{% block body %}
+  <h2 style="margin:0 0 12px 0;color:{{ brand_navy }};font-size:20px;">Your move-in pack</h2>
+  <p>Welcome to your new home at <strong>{{ property_address }}</strong>.</p>
+  <p>
+    The prescribed documents we are legally required to provide before you move in are
+    <strong>attached to this email as PDFs</strong>. Please save them — they may be needed
+    later if any question of compliance arises.
+  </p>
+  {% if doc_summary %}
+  <ul>
+    {% for d in doc_summary %}<li>{{ d.title }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+  {% if is_apt %}
+  <p style="color:#92400e;background:#fef3c7;padding:8px 12px;border-radius:4px;">
+    Under the Renters' Rights Act 2025, the attached Information Sheet outlines your rights as
+    a tenant of an Assured Periodic Tenancy. Please read it carefully.
+  </p>
+  {% endif %}
+  <p>If anything is unclear, please contact us at management@palacegate.com or 020 7581 1631.</p>
+{% endblock %}

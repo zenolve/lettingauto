@@ -1,0 +1,22 @@
+{% macro section(title, color="#1f2937") %}
+  <h3 style="margin:24px 0 8px 0;color:{{ color }};font-size:15px;">{{ title }}</h3>
+{% endmacro %}
+
+{% macro list_block(items, color="#1f2937") %}
+  {% if items %}
+  <ul style="margin:0 0 8px 18px;padding:0;color:{{ color }};font-size:14px;line-height:1.55;">
+    {% for it in items %}<li style="margin:2px 0;">{{ it }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+{% endmacro %}
+
+{% macro kv_table(items) %}
+  <table cellpadding="6" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:13px;">
+    {% for label, value in items %}
+    <tr>
+      <td style="border-bottom:1px solid #e5e7eb;color:#6b7280;width:40%;">{{ label }}</td>
+      <td style="border-bottom:1px solid #e5e7eb;color:#111827;">{{ value or "—" }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+{% endmacro %}

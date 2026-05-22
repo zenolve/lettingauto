@@ -1,0 +1,7 @@
+{% extends "_base.html" %}
+{% block body %}
+  <h2 style="margin:0 0 12px 0;color:{{ brand_navy }};font-size:20px;">Document signed</h2>
+  <p><strong>{{ doc_title }}</strong> ({{ kind }}) was signed for {{ property_address }}.</p>
+  <p>Signers:</p>
+  <ul>{% for s in submitters %}<li>{{ s.get("name") }} &lt;{{ s.get("email") }}&gt; — {{ s.get("completed_at") }}</li>{% endfor %}</ul>
+{% endblock %}

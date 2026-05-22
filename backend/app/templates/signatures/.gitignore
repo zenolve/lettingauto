@@ -1,0 +1,13 @@
+# Don't commit actual signature images — they're sensitive personal data.
+# Each deployment manages its own signatures via /agent/signatures.
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+# signatures.json references real signatory names + roles — also sensitive.
+signatures.json
+# Keep this file (and the README) tracked so the directory exists in fresh
+# clones.
+!.gitignore
+!README.md

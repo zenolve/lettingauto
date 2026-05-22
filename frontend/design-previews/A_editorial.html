@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Palace Gate — Editorial</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #faf7f2;
+    --paper: #ffffff;
+    --ink: #15171a;
+    --ink-soft: #4b5057;
+    --muted: #8a8f96;
+    --hairline: #e3ddd2;
+    --navy: #0f2a4d;
+    --gold: #ad8b3a;
+    --emerald: #1d6b4e;
+    --rose: #a4282c;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Inter", "Helvetica Neue", system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3 {
+    font-family: "Fraunces", Charter, "Iowan Old Style", Georgia, serif;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0;
+  }
+  h1 { font-size: 44px; line-height: 1.05; font-variation-settings: "opsz" 110; }
+  h2 { font-size: 26px; line-height: 1.15; font-variation-settings: "opsz" 80; }
+  h3 { font-size: 16px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; color: var(--muted); }
+  a { color: var(--navy); }
+  code { font: 12px ui-monospace, SFMono-Regular, monospace; background: #f1ede5; padding: 1px 5px; border-radius: 4px; }
+
+  .frame { max-width: 1100px; margin: 0 auto; padding: 32px 48px; }
+  .top {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 48px; border-bottom: 1px solid var(--hairline);
+    background: var(--paper);
+  }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .brand-mark {
+    width: 36px; height: 36px; border: 1.5px solid var(--ink); border-radius: 4px;
+    display: grid; place-items: center; font-family: "Fraunces"; font-weight: 600; font-size: 17px;
+  }
+  .brand-name { font-family: "Fraunces"; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+  .brand-sub { color: var(--muted); font-size: 12px; margin-top: -3px; }
+  nav.top-nav a { color: var(--ink-soft); text-decoration: none; margin-left: 28px; font-size: 14px; }
+  nav.top-nav a.active { color: var(--ink); border-bottom: 1.5px solid var(--gold); padding-bottom: 4px; }
+
+  /* Page heading kicker pattern — editorial signature */
+  .kicker { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  .lede { color: var(--ink-soft); max-width: 560px; margin-top: 12px; font-size: 16px; }
+
+  /* Card */
+  .card {
+    background: var(--paper); border: 1px solid var(--hairline); border-radius: 6px;
+    padding: 24px;
+  }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .row-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+
+  /* Property list table */
+  table.props { width: 100%; border-collapse: collapse; }
+  table.props th, table.props td { text-align: left; padding: 14px 18px; }
+  table.props thead th {
+    font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); font-weight: 500;
+    border-bottom: 1px solid var(--hairline);
+  }
+  table.props tbody tr { border-bottom: 1px solid var(--hairline); }
+  table.props tbody tr:hover { background: #fbf8f1; }
+  .addr { font-family: "Fraunces"; font-weight: 500; font-size: 17px; color: var(--ink); }
+  .addr-sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+
+  .pill { display: inline-block; font-size: 11px; padding: 3px 9px; border-radius: 999px; border: 1px solid; }
+  .pill-clear { color: var(--emerald); border-color: #cae7d8; background: #f0f8f4; }
+  .pill-block { color: var(--rose); border-color: #f0c8c9; background: #fbf0f0; }
+
+  .btn {
+    display: inline-block; padding: 9px 16px; border-radius: 4px; text-decoration: none; font-size: 14px;
+    font-weight: 500; border: 1px solid var(--ink); background: var(--ink); color: var(--paper);
+  }
+  .btn-ghost { background: transparent; color: var(--ink); border-color: var(--hairline); }
+  .btn-gold { background: var(--gold); border-color: var(--gold); color: var(--paper); }
+
+  /* Stage pipeline (chips) */
+  .pipeline { display: flex; align-items: center; flex-wrap: wrap; gap: 0; padding: 18px 0; }
+  .chip {
+    border: 1px solid var(--hairline); padding: 7px 14px; font-size: 13px; color: var(--ink-soft);
+    background: var(--paper); border-radius: 999px; margin-right: 6px; margin-bottom: 6px;
+  }
+  .chip.done   { border-color: #cdc9bd; color: var(--ink); background: #f5f1e8; }
+  .chip.current { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+  .chip.viewing { border: 2px solid var(--gold); padding: 6px 13px; }
+  .chip small { display: block; font-size: 10px; color: inherit; opacity: 0.7; }
+
+  .panel { padding: 32px; background: var(--paper); border: 1px solid var(--hairline); border-radius: 6px; }
+  .meta-line { color: var(--muted); font-size: 14px; margin-top: 6px; }
+
+  .stat { padding: 18px 0; border-bottom: 1px dashed var(--hairline); display: flex; justify-content: space-between; gap: 16px; }
+  .stat:last-child { border-bottom: 0; }
+  .stat .k { color: var(--muted); font-size: 13px; letter-spacing: 0.04em; }
+  .stat .v { color: var(--ink); font-size: 15px; }
+
+  /* Editor */
+  .editor-shell { display: grid; grid-template-columns: 1fr 320px; gap: 28px; }
+  .doc-body {
+    background: var(--paper); border: 1px solid var(--hairline); padding: 56px 64px; border-radius: 6px;
+    min-height: 480px; line-height: 1.8;
+  }
+  .doc-body h2 { margin-bottom: 8px; }
+  .doc-body p { margin: 0 0 18px 0; }
+  .doc-body .seal {
+    display: inline-block; font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--gold); border-top: 2px solid var(--gold); padding-top: 8px;
+  }
+  .merge-token { background: #fef7e2; color: #8a6900; padding: 1px 4px; border-radius: 3px; font-family: ui-monospace, monospace; font-size: 13px; }
+
+  .sec-divider { font-family: "Fraunces"; font-size: 14px; font-weight: 600; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; padding: 20px 0 12px; }
+  .footer-note { color: var(--muted); font-size: 12px; margin-top: 16px; text-align: center; padding-bottom: 40px; }
+</style>
+</head>
+<body>
+
+<!-- TOP NAV -->
+<header class="top">
+  <div class="brand">
+    <div class="brand-mark">PG</div>
+    <div>
+      <div class="brand-name">Palace Gate</div>
+      <div class="brand-sub">Lettings & Property Management</div>
+    </div>
+  </div>
+  <nav class="top-nav">
+    <a href="#" class="active">Dashboard</a>
+    <a href="#">Library</a>
+    <a href="#">New property</a>
+    <a href="#">Sign out</a>
+  </nav>
+</header>
+
+<!-- PAGE: DASHBOARD -->
+<div class="frame">
+  <div class="kicker">All properties</div>
+  <div style="display:flex; align-items:flex-end; justify-content:space-between; gap:24px;">
+    <div>
+      <h1>Properties under management</h1>
+      <p class="lede">Ten active records · sorted by most recently added · gate-status surfaced inline so blockers don't hide.</p>
+    </div>
+    <a class="btn btn-gold" href="#">+ New property</a>
+  </div>
+
+  <div style="margin-top: 28px;">
+    <div class="card" style="padding: 0;">
+      <table class="props">
+        <thead>
+          <tr><th>Address</th><th>Tenancy</th><th>Service</th><th>Stage</th><th>Gate</th><th style="text-align:right;">Added</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <div class="addr">12 Test Mews, London</div>
+              <div class="addr-sub">SW1A 1AA</div>
+            </td>
+            <td>APT</td>
+            <td>Let Only</td>
+            <td>5 · Referencing</td>
+            <td><span class="pill pill-clear">Clear</span></td>
+            <td style="text-align:right;">15 May 26</td>
+          </tr>
+          <tr>
+            <td>
+              <div class="addr">7 Broadwalk, Kensington</div>
+              <div class="addr-sub">W8 6JJ</div>
+            </td>
+            <td>Common Law</td>
+            <td>Full Management</td>
+            <td>2 · Compliance</td>
+            <td><span class="pill pill-block">Blocked</span></td>
+            <td style="text-align:right;">14 May 26</td>
+          </tr>
+          <tr>
+            <td>
+              <div class="addr">Flat 4, Cheval Place</div>
+              <div class="addr-sub">SW7 1ER</div>
+            </td>
+            <td>APT</td>
+            <td>Rent Collection</td>
+            <td>7 · Pre Move-in</td>
+            <td><span class="pill pill-clear">Clear</span></td>
+            <td style="text-align:right;">12 May 26</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="sec-divider" style="text-align:center;">— Property detail —</div>
+
+<!-- PAGE: PROPERTY DETAIL -->
+<div class="frame">
+  <a href="#" style="font-size: 13px; color: var(--ink-soft); text-decoration: none;">← All properties</a>
+  <div style="display:flex; align-items:flex-end; justify-content:space-between; margin-top: 8px;">
+    <div>
+      <div class="kicker">Stage 5 of 9 · Referencing</div>
+      <h1>12 Test Mews, London</h1>
+      <p class="meta-line">SW1A 1AA · Assured Periodic Tenancy · Let Only · Property #74</p>
+    </div>
+    <a class="btn btn-ghost" href="#">Open flow board →</a>
+  </div>
+
+  <div class="pipeline" style="margin-top: 20px;">
+    <span class="chip done">1 Take-on<small>complete</small></span>
+    <span class="chip done">2 Compliance<small>complete</small></span>
+    <span class="chip done">3 Marketing<small>complete</small></span>
+    <span class="chip done">4 Offer<small>complete</small></span>
+    <span class="chip current viewing">5 Referencing<small>current</small></span>
+    <span class="chip">6 TA Signing</span>
+    <span class="chip">7 Pre Move-in</span>
+    <span class="chip">8 Live Tenancy</span>
+    <span class="chip">9 End</span>
+  </div>
+
+  <div class="row" style="margin-top: 28px;">
+    <div class="card">
+      <h3>Paragon referencing</h3>
+      <div class="stat"><span class="k">Test Tenant</span><span class="v">PRG-MOCK-A4F7 · Pass</span></div>
+      <div class="stat"><span class="k">Landlord approved</span><span class="v" style="color: var(--emerald);">Yes</span></div>
+      <div class="stat"><span class="k">Stage 6 unlocked</span><span class="v">Awaiting TA signing</span></div>
+      <div style="margin-top: 16px;"><a class="btn" href="#">Send TA via library →</a></div>
+    </div>
+    <div class="card">
+      <h3>Sent at this stage</h3>
+      <div class="stat">
+        <span><div class="addr" style="font-size:14px;">TPL-06 Referencing Request</div><span class="addr-sub">14 May · Email · tenant.test@example.com</span></span>
+        <span class="pill pill-clear">Sent</span>
+      </div>
+      <div class="stat">
+        <span><div class="addr" style="font-size:14px;">PG T&amp;C 2026</div><span class="addr-sub">14 May · DocuSeal</span></span>
+        <span class="pill pill-clear">Signed</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="sec-divider" style="text-align:center;">— Document editor —</div>
+
+<!-- PAGE: LIBRARY EDITOR -->
+<div class="frame">
+  <a href="#" style="font-size: 13px; color: var(--ink-soft); text-decoration: none;">← Property</a>
+  <div style="margin-top:8px;">
+    <div class="kicker">Document library · TPL-05</div>
+    <h2>Offer Confirmation to Landlord</h2>
+    <p class="meta-line">Editing the per-property send · merge fields interpolated at send time</p>
+  </div>
+
+  <div class="editor-shell" style="margin-top: 24px;">
+    <div class="doc-body">
+      <span class="seal">Palace Gate Lettings</span>
+      <h2 style="margin-top: 18px;">Offer Confirmation</h2>
+      <p style="color: var(--muted); font-size: 13px; letter-spacing: 0.05em; margin-bottom: 24px;">16 May 2026</p>
+      <p>Dear <span class="merge-token">{{landlord_full_name}}</span>,</p>
+      <p>Re: <strong><span class="merge-token">{{property_address}}</span></strong></p>
+      <p>We are pleased to confirm receipt of a formal offer for the above property from <span class="merge-token">{{tenant_full_name}}</span>. The proposed terms are set out below for your consideration.</p>
+      <p>Initial rent: <strong>£<span class="merge-token">{{monthly_rent}}</span> per calendar month</strong>, with a security deposit of <strong>£<span class="merge-token">{{deposit_amount}}</span></strong>. The tenancy is to commence on <span class="merge-token">{{tenancy_start_date}}</span> on a periodic basis under the Renters' Rights Act 2025.</p>
+      <p>Kindly confirm your acceptance by return so we may instruct Paragon for referencing.</p>
+      <p style="margin-top: 32px;">Yours sincerely,</p>
+      <p><strong>Palace Gate Lettings</strong><br/><span style="color: var(--muted);">11 Palace Gate, Kensington, London W8 5LS</span></p>
+    </div>
+    <aside>
+      <div class="card" style="padding: 18px;">
+        <h3>How to send</h3>
+        <div style="margin-top: 10px;">
+          <label style="display:block; padding: 6px 0; cursor:pointer;">
+            <input type="radio" name="m" /> Send for signature
+          </label>
+          <label style="display:block; padding: 6px 0; cursor:pointer;">
+            <input type="radio" name="m" checked /> Email as PDF
+          </label>
+          <label style="display:block; padding: 6px 0; cursor:pointer;">
+            <input type="radio" name="m" /> Send as email
+          </label>
+        </div>
+      </div>
+      <div class="card" style="padding: 18px; margin-top: 14px;">
+        <h3>Merge fields</h3>
+        <div style="display:flex; flex-wrap:wrap; gap: 6px; margin-top: 8px;">
+          <span class="chip" style="font-size:11px; padding:3px 9px;">Landlord name</span>
+          <span class="chip" style="font-size:11px; padding:3px 9px;">Property address</span>
+          <span class="chip" style="font-size:11px; padding:3px 9px;">Monthly rent</span>
+          <span class="chip" style="font-size:11px; padding:3px 9px;">Tenant name</span>
+        </div>
+      </div>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px;">
+        <a class="btn btn-ghost" style="text-align:center;" href="#">Preview</a>
+        <a class="btn btn-gold" style="text-align:center;" href="#">Send PDF</a>
+      </div>
+    </aside>
+  </div>
+
+  <p class="footer-note">Variation A · Editorial · Fraunces + Inter · cream paper</p>
+</div>
+
+</body>
+</html>

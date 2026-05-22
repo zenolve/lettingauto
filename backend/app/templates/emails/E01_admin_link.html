@@ -1,0 +1,14 @@
+{% extends "_base.html" %}
+{% block title %}Welcome to {{ brand_name }}{% endblock %}
+{% block body %}
+  <h2 style="margin:0 0 12px 0;color:{{ brand_navy }};font-size:20px;">Welcome to {{ brand_name }}</h2>
+  <p>Your property at <strong>{{ property_address }}</strong> has been added to our system.</p>
+  <p>To continue, please complete the landlord admin form using the secure link below:</p>
+  <p style="margin:20px 0;">
+    <a href="{{ form_url }}" style="background:{{ brand_navy }};color:#ffffff;text-decoration:none;
+       padding:12px 22px;border-radius:6px;font-weight:600;display:inline-block;">
+      Complete admin form
+    </a>
+  </p>
+  <p style="color:#6b7280;font-size:12px;">If the button doesn't work, copy this URL into your browser:<br>{{ form_url }}</p>
+{% endblock %}

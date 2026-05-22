@@ -1,0 +1,8 @@
+{% extends "_base.html" %}
+{% import "_macros.html" as m %}
+{% block body %}
+  <h2 style="margin:0 0 12px 0;color:#7f1d1d;">Document declined</h2>
+  <p><strong>{{ doc_title }}</strong> was declined for {{ property_address }}.</p>
+  {{ m.list_block(warnings, "#b91c1c") }}
+  <p>The property gate has been set to Blocked pending resolution.</p>
+{% endblock %}

@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Palace Gate — Brutalist Pro</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f4f1ec;        /* warm off-white */
+    --paper: #ffffff;
+    --ink: #0a0a0a;
+    --ink-soft: #2b2b2b;
+    --muted: #6c6c6c;
+    --hairline: #0a0a0a;  /* hard black rules — brutalist signature */
+    --soft-hairline: #d8d3ca;
+    --accent: #ff5400;    /* burnt orange */
+    --emerald: #1f7a4a;
+    --rose: #b3201f;
+    --navy: #001b5e;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    font-size: 14.5px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2 { font-family: "IBM Plex Serif", Georgia, serif; margin: 0; }
+  h1 { font-size: 56px; font-weight: 700; line-height: 0.98; letter-spacing: -0.02em; }
+  h2 { font-size: 28px; font-weight: 600; line-height: 1.1; letter-spacing: -0.01em; }
+  h3 { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.16em; color: var(--ink); margin: 0; }
+  a { color: var(--ink); }
+  .mono, code { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 13px; }
+
+  .frame { max-width: 1200px; margin: 0 auto; padding: 36px 40px; }
+
+  /* Top nav — bold black bar */
+  .top {
+    background: var(--ink); color: var(--paper);
+    padding: 12px 40px;
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 4px solid var(--accent);
+  }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .brand-mark {
+    width: 38px; height: 38px; background: var(--accent); color: black;
+    font-family: "IBM Plex Mono"; font-weight: 600; font-size: 17px;
+    display: grid; place-items: center; border-radius: 0;
+  }
+  .brand-name { font-family: "IBM Plex Sans"; font-weight: 600; letter-spacing: 0.02em; }
+  .brand-sub { color: #d8d8d8; font-family: "IBM Plex Mono"; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+  nav.tabs { display: flex; gap: 0; }
+  nav.tabs a {
+    padding: 8px 16px; color: var(--paper); text-decoration: none; font-size: 13.5px;
+    font-family: "IBM Plex Mono"; text-transform: uppercase; letter-spacing: 0.08em;
+    border-left: 1px solid #333;
+  }
+  nav.tabs a.active { background: var(--accent); color: var(--ink); }
+  nav.tabs a:hover:not(.active) { background: #1a1a1a; }
+
+  /* Page title block — large serif with rule */
+  .title-block { padding: 28px 0 12px; border-bottom: 2px solid var(--hairline); }
+  .kicker { font-family: "IBM Plex Mono"; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+  .lede { font-size: 16px; color: var(--ink-soft); margin-top: 16px; max-width: 620px; }
+
+  /* Buttons */
+  .btn {
+    display: inline-block; padding: 9px 18px; font-family: "IBM Plex Sans"; font-size: 13.5px;
+    font-weight: 500; text-decoration: none; border: 2px solid var(--ink); background: var(--ink); color: var(--paper);
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .btn:hover { background: var(--accent); color: var(--ink); border-color: var(--accent); }
+  .btn-outline { background: transparent; color: var(--ink); }
+  .btn-orange { background: var(--accent); color: var(--ink); border-color: var(--accent); }
+
+  /* Tables */
+  table.props { width: 100%; border-collapse: collapse; border-top: 2px solid var(--ink); border-bottom: 2px solid var(--ink); }
+  table.props th, table.props td { padding: 14px 18px; text-align: left; }
+  table.props thead th {
+    font-family: "IBM Plex Mono"; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 500;
+    border-bottom: 1px solid var(--ink); color: var(--ink);
+  }
+  table.props tbody tr { border-bottom: 1px solid var(--soft-hairline); }
+  table.props tbody tr:hover { background: rgba(255,84,0,0.06); }
+  table.props .addr { font-family: "IBM Plex Serif"; font-weight: 600; font-size: 18px; color: var(--ink); }
+  table.props .addr-sub { font-family: "IBM Plex Mono"; font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+
+  /* Pills */
+  .pill {
+    display: inline-block; font-family: "IBM Plex Mono"; font-size: 11px; padding: 2px 9px;
+    text-transform: uppercase; letter-spacing: 0.08em; border: 1.5px solid;
+  }
+  .pill-clear { color: var(--emerald); border-color: var(--emerald); background: #e9f3ed; }
+  .pill-block { color: var(--rose);    border-color: var(--rose);    background: #fbe9e9; }
+  .pill-neutral { color: var(--ink); border-color: var(--ink); background: var(--paper); }
+
+  /* Pipeline — numbered blocks */
+  .pipeline {
+    display: flex; flex-wrap: wrap; gap: 0; border: 2px solid var(--ink); margin-top: 22px;
+  }
+  .chip {
+    padding: 12px 16px; font-size: 13.5px; color: var(--ink-soft);
+    border-right: 1px solid var(--ink); flex: 1; min-width: 110px; background: var(--paper);
+    text-align: left;
+  }
+  .chip:last-child { border-right: 0; }
+  .chip .num { font-family: "IBM Plex Mono"; font-size: 11px; color: var(--muted); display:block; margin-bottom: 2px; }
+  .chip.done { background: #ebe7df; }
+  .chip.current { background: var(--accent); color: var(--ink); }
+  .chip.current .num { color: var(--ink); }
+  .chip.viewing { box-shadow: inset 0 0 0 3px var(--ink); }
+
+  /* Cards (panels) */
+  .panel {
+    border: 2px solid var(--ink); background: var(--paper); padding: 22px 24px;
+  }
+  .panel-head { display:flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid var(--ink); padding-bottom: 10px; margin-bottom: 14px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 24px; }
+  .kv { display: flex; justify-content: space-between; padding: 11px 0; border-bottom: 1px dashed var(--soft-hairline); font-size: 13.5px; }
+  .kv:last-child { border-bottom: 0; }
+  .kv .k { color: var(--muted); font-family: "IBM Plex Mono"; font-size: 12px; }
+  .kv .v { color: var(--ink); }
+
+  /* Editor */
+  .editor-shell { display: grid; grid-template-columns: 1fr 320px; gap: 24px; margin-top: 24px; }
+  .doc-paper {
+    background: var(--paper); border: 2px solid var(--ink); padding: 60px 64px; min-height: 480px;
+    line-height: 1.7; position: relative;
+  }
+  .doc-paper::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 6px; background: var(--accent);
+  }
+  .doc-paper h2 { font-family: "IBM Plex Serif"; margin-bottom: 4px; }
+  .doc-paper .date { font-family: "IBM Plex Mono"; color: var(--muted); font-size: 12px; letter-spacing: 0.06em; margin-bottom: 24px; }
+  .doc-paper p { margin: 0 0 18px 0; }
+  .merge-token { background: var(--ink); color: var(--accent); padding: 1px 7px; font-family: "IBM Plex Mono"; font-size: 12.5px; }
+
+  .sec-divider {
+    font-family: "IBM Plex Mono"; font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted);
+    padding: 36px 0 0; text-align: center;
+  }
+  .sec-divider::before, .sec-divider::after { content: "—"; margin: 0 14px; color: var(--ink); }
+  .footer-note { color: var(--muted); font-family: "IBM Plex Mono"; font-size: 11px; text-align: center; padding: 30px 0 50px; letter-spacing: 0.12em; text-transform: uppercase; }
+
+  /* Search row */
+  .search-row { display: flex; gap: 12px; margin-top: 22px; }
+  .search-row input, .search-row select {
+    font-family: "IBM Plex Sans"; font-size: 14px; padding: 9px 12px;
+    border: 2px solid var(--ink); background: var(--paper); color: var(--ink); border-radius: 0;
+  }
+</style>
+</head>
+<body>
+
+<!-- TOP NAV -->
+<header class="top">
+  <div class="brand">
+    <div class="brand-mark">PG</div>
+    <div>
+      <div class="brand-name">PALACE GATE</div>
+      <div class="brand-sub">Lettings · Property #-system</div>
+    </div>
+  </div>
+  <nav class="tabs">
+    <a href="#" class="active">Dashboard</a>
+    <a href="#">Library</a>
+    <a href="#">New property</a>
+  </nav>
+  <span class="mono" style="color:#d8d8d8;">admin@palacegate.com</span>
+</header>
+
+<!-- PAGE: DASHBOARD -->
+<div class="frame">
+  <div class="title-block">
+    <div class="kicker">All properties · 10 active</div>
+    <h1>Properties.</h1>
+    <p class="lede">Sorted by most recently added. Gate status surfaced inline. Click any row to open the property record.</p>
+  </div>
+
+  <div class="search-row">
+    <input style="flex:1;" placeholder="SEARCH BY ADDRESS, POSTCODE..." />
+    <select><option>Newest first</option><option>Oldest</option><option>Address</option></select>
+    <a class="btn btn-orange" href="#">+ New property</a>
+  </div>
+
+  <table class="props" style="margin-top: 22px;">
+    <thead>
+      <tr>
+        <th>Address</th>
+        <th>Tenancy</th>
+        <th>Service</th>
+        <th>Stage</th>
+        <th>Gate</th>
+        <th style="text-align:right;">Added</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>
+          <div class="addr">12 Test Mews, London</div>
+          <div class="addr-sub">SW1A 1AA</div>
+        </td>
+        <td class="mono">APT</td>
+        <td class="mono">LET ONLY</td>
+        <td><span class="pill pill-neutral">05 · REFERENCING</span></td>
+        <td><span class="pill pill-clear">CLEAR</span></td>
+        <td style="text-align:right;" class="mono">15 / 05 / 26</td>
+        <td><a href="#" class="mono" style="font-size:12px; text-transform:uppercase; letter-spacing: 0.1em;">Open →</a></td>
+      </tr>
+      <tr>
+        <td>
+          <div class="addr">7 Broadwalk, Kensington</div>
+          <div class="addr-sub">W8 6JJ</div>
+        </td>
+        <td class="mono">COMMON LAW</td>
+        <td class="mono">FULL MGMT</td>
+        <td><span class="pill pill-neutral">02 · COMPLIANCE</span></td>
+        <td><span class="pill pill-block">BLOCKED</span></td>
+        <td style="text-align:right;" class="mono">14 / 05 / 26</td>
+        <td><a href="#" class="mono" style="font-size:12px; text-transform:uppercase; letter-spacing: 0.1em;">Open →</a></td>
+      </tr>
+      <tr>
+        <td>
+          <div class="addr">Flat 4, Cheval Place</div>
+          <div class="addr-sub">SW7 1ER</div>
+        </td>
+        <td class="mono">APT</td>
+        <td class="mono">RENT COLL.</td>
+        <td><span class="pill pill-neutral">07 · PRE MOVE-IN</span></td>
+        <td><span class="pill pill-clear">CLEAR</span></td>
+        <td style="text-align:right;" class="mono">12 / 05 / 26</td>
+        <td><a href="#" class="mono" style="font-size:12px; text-transform:uppercase; letter-spacing: 0.1em;">Open →</a></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="sec-divider">Property detail</div>
+
+<!-- PAGE: PROPERTY DETAIL -->
+<div class="frame">
+  <a href="#" class="mono" style="font-size: 12px; text-decoration: none; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;">← All properties</a>
+  <div class="title-block" style="border-bottom: 4px solid var(--ink); padding-bottom: 18px;">
+    <div class="kicker">Stage 05 / 09 · Referencing</div>
+    <div style="display: flex; justify-content: space-between; align-items: flex-end; gap: 24px;">
+      <div>
+        <h1>12 Test Mews,<br/>London.</h1>
+        <p class="lede mono" style="text-transform:uppercase; letter-spacing: 0.08em; font-size: 13px;">SW1A 1AA · APT · LET ONLY · #74</p>
+      </div>
+      <a class="btn btn-outline" href="#">Open flow board →</a>
+    </div>
+  </div>
+
+  <div class="pipeline">
+    <div class="chip done"><span class="num">01</span>Take-on</div>
+    <div class="chip done"><span class="num">02</span>Compliance</div>
+    <div class="chip done"><span class="num">03</span>Marketing</div>
+    <div class="chip done"><span class="num">04</span>Offer</div>
+    <div class="chip current viewing"><span class="num">05</span>Referencing</div>
+    <div class="chip"><span class="num">06</span>TA Signing</div>
+    <div class="chip"><span class="num">07</span>Pre Move-in</div>
+    <div class="chip"><span class="num">08</span>Live Tenancy</div>
+    <div class="chip"><span class="num">09</span>End</div>
+  </div>
+
+  <div class="row">
+    <div class="panel">
+      <div class="panel-head">
+        <h3>Paragon referencing</h3>
+        <a href="#" class="mono" style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;">Instruct All →</a>
+      </div>
+      <div class="kv"><span class="k">Test Tenant</span><span class="v"><span class="pill pill-clear">PASS</span></span></div>
+      <div class="kv"><span class="k">Paragon ref</span><span class="v mono">PRG-MOCK-19212606</span></div>
+      <div class="kv"><span class="k">LL approved</span><span class="v" style="color:var(--emerald);">✓ YES</span></div>
+      <div class="kv"><span class="k">Gate to Stage 06</span><span class="v" style="color: var(--emerald); font-weight: 600;">UNLOCKED</span></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head">
+        <h3>Sent at this stage</h3>
+        <span class="mono" style="color: var(--muted); font-size: 11px;">02 docs</span>
+      </div>
+      <div class="kv">
+        <span>
+          <div class="v"><strong>TPL-06</strong> · Referencing Request</div>
+          <div class="k">14 MAY · EMAIL · tenant.test@example.com</div>
+        </span>
+        <span class="pill pill-clear">SENT</span>
+      </div>
+      <div class="kv">
+        <span>
+          <div class="v"><strong>PG T&amp;C 2026</strong></div>
+          <div class="k">14 MAY · DOCUSEAL</div>
+        </span>
+        <span class="pill pill-clear">SIGNED</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="sec-divider">Document editor</div>
+
+<!-- PAGE: LIBRARY EDITOR -->
+<div class="frame">
+  <a href="#" class="mono" style="font-size: 12px; text-decoration: none; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;">← Property</a>
+  <div class="title-block" style="padding-bottom: 16px;">
+    <div class="kicker">Template TPL-05 · Stage 04</div>
+    <h2 style="font-size: 38px;">Offer Confirmation to Landlord.</h2>
+    <p class="lede">Editing per-property send. Merge tokens are interpolated at send time. Choose Sign, Email PDF or Send as Email below.</p>
+  </div>
+
+  <div class="editor-shell">
+    <div class="doc-paper">
+      <h2>Offer Confirmation</h2>
+      <div class="date">16 / 05 / 2026</div>
+      <p>Dear <span class="merge-token">{{landlord_full_name}}</span>,</p>
+      <p>Re: <strong><span class="merge-token">{{property_address}}</span></strong></p>
+      <p>We are pleased to confirm receipt of a formal offer from <span class="merge-token">{{tenant_full_name}}</span>. The terms are set out below.</p>
+      <p>Rent: <strong>£<span class="merge-token">{{monthly_rent}}</span> pcm</strong>. Deposit: <strong>£<span class="merge-token">{{deposit_amount}}</span></strong>. Start: <span class="merge-token">{{tenancy_start_date}}</span> (Assured Periodic Tenancy under RRA 2025).</p>
+      <p>Please confirm acceptance.</p>
+      <p style="margin-top: 28px;">Yours sincerely,</p>
+      <p><strong>Palace Gate Lettings</strong></p>
+    </div>
+    <aside>
+      <div class="panel" style="padding: 16px 18px;">
+        <h3 style="margin-bottom: 10px;">Send mode</h3>
+        <label style="display:flex; gap: 10px; padding: 8px 0; border-top: 1px dashed var(--soft-hairline); cursor:pointer;"><input type="radio" name="m" /><span class="mono" style="font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.06em;">Sign</span></label>
+        <label style="display:flex; gap: 10px; padding: 8px 0; border-top: 1px dashed var(--soft-hairline); cursor:pointer;"><input type="radio" name="m" checked /><span class="mono" style="font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.06em;">Email PDF</span></label>
+        <label style="display:flex; gap: 10px; padding: 8px 0; border-top: 1px dashed var(--soft-hairline); cursor:pointer;"><input type="radio" name="m" /><span class="mono" style="font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.06em;">Send as email</span></label>
+      </div>
+      <div class="panel" style="padding: 16px 18px; margin-top: 12px;">
+        <h3 style="margin-bottom: 10px;">Merge fields</h3>
+        <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+          <span class="pill pill-neutral mono" style="font-size: 10.5px;">landlord_full_name</span>
+          <span class="pill pill-neutral mono" style="font-size: 10.5px;">property_address</span>
+          <span class="pill pill-neutral mono" style="font-size: 10.5px;">monthly_rent</span>
+          <span class="pill pill-neutral mono" style="font-size: 10.5px;">tenant_full_name</span>
+          <span class="pill pill-neutral mono" style="font-size: 10.5px;">tenancy_start_date</span>
+        </div>
+      </div>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px;">
+        <a class="btn btn-outline" style="text-align:center;" href="#">Preview</a>
+        <a class="btn btn-orange" style="text-align:center;" href="#">Send</a>
+      </div>
+    </aside>
+  </div>
+
+  <p class="footer-note">Variation C · Brutalist Pro · IBM Plex · burnt-orange accent</p>
+</div>
+
+</body>
+</html>

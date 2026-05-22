@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ title }}</title>
+<style>
+  @page {
+    size: A4;
+    margin: 22mm 18mm 22mm 18mm;
+    @top-left {
+      content: "{{ brand_name }}";
+      font-family: 'Helvetica', 'Arial', sans-serif;
+      color: {{ brand_navy }};
+      font-size: 9pt;
+      font-weight: 700;
+    }
+    @top-right {
+      content: "{{ title }}";
+      font-family: 'Helvetica', 'Arial', sans-serif;
+      color: #6b7280;
+      font-size: 9pt;
+    }
+    @bottom-left { content: "{{ footer_text }}"; color:#9ca3af; font-size:8pt; }
+    @bottom-right { content: "Page " counter(page) " of " counter(pages); color:#9ca3af; font-size:8pt; }
+  }
+  body {
+    font-family: 'Helvetica', 'Arial', sans-serif;
+    font-size: 11pt;
+    color: #111827;
+    line-height: 1.55;
+  }
+  h1, h2, h3 { color: {{ brand_navy }}; }
+  h1 { font-size: 20pt; margin: 0 0 10pt 0; border-bottom: 2pt solid {{ brand_gold }}; padding-bottom: 4pt; }
+  h2 { font-size: 14pt; margin: 18pt 0 4pt 0; }
+  h3 { font-size: 12pt; margin: 12pt 0 3pt 0; }
+  p { margin: 6pt 0; }
+  table { border-collapse: collapse; width: 100%; margin: 8pt 0; }
+  td, th { border: 0.5pt solid #d1d5db; padding: 5pt 8pt; vertical-align: top; }
+  th { background: #f3f4f6; text-align: left; }
+  ol, ul { padding-left: 18pt; }
+  .signature-block { margin-top: 30pt; }
+  .signature-block .line { border-bottom: 0.5pt solid #6b7280; width: 200pt; margin: 24pt 0 4pt 0; }
+</style>
+</head>
+<body>
+{{ body_html | safe }}
+</body>
+</html>

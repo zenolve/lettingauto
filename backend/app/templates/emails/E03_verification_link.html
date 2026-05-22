@@ -1,0 +1,12 @@
+{% extends "_base.html" %}
+{% block body %}
+  <h2 style="margin:0 0 12px 0;color:{{ brand_navy }};font-size:20px;">Verify your identity</h2>
+  <p>Thanks for completing the admin form for <strong>{{ property_address }}</strong>.</p>
+  <p>To complete onboarding, please upload your AML documents using the secure link below.</p>
+  <p style="margin:20px 0;">
+    <a href="{{ form_url }}" style="background:{{ brand_navy }};color:#ffffff;text-decoration:none;
+       padding:12px 22px;border-radius:6px;font-weight:600;display:inline-block;">
+      Complete verification
+    </a>
+  </p>
+{% endblock %}
