@@ -313,6 +313,26 @@ async def handle_offer(property_id: str, payload: OfferInput) -> dict:
     except Exception as e:  # noqa: BLE001
         logger.error("offer.row_create_failed err=%s", e)
 
+    # 4c. Record the offer-letter send in Sent_Documents (Stage 4). Status is
+    #     flipped to Signed/Declined by PG_04 when the landlord responds.
+    if docuseal_response:
+        try:
+            from app.services.sent_documents import record_sent  # noqa: PLC0415
+            ll_email = pfields.get("landlord_email")
+            record_sent(
+                property_id=property_id,
+                doc_id="offer_letter",
+                doc_name="Offer Letter (to landlord)",
+                stage=4,
+                channel="Sign",
+                recipients=[ll_email] if ll_email else None,
+                envelope_id=(docuseal_response or {}).get("id"),
+                sent_by="system",
+                status="Sent",
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.warning("offer.sent_doc_record_failed err=%s", e)
+
     # 5. Submissions audit
     at.create(at.TableNames.SUBMISSIONS, {
         "Form Name": "PG_03 Offer",

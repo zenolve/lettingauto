@@ -34,6 +34,7 @@ class TableNames:
     GATE_LOG = "gate_log"
     COMPLIANCE = "compliance"
     OFFERS = "offers"
+    SENT_DOCUMENTS = "sent_documents"
 
 
 _TABLE_IDS = {
@@ -48,6 +49,7 @@ _TABLE_IDS = {
     TableNames.GATE_LOG: settings.airtable_table_gate_log,
     TableNames.COMPLIANCE: settings.airtable_table_compliance,
     TableNames.OFFERS: settings.airtable_table_offers,
+    TableNames.SENT_DOCUMENTS: settings.airtable_table_sent_documents,
 }
 
 

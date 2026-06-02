@@ -586,6 +586,81 @@ workflow that needs real-time reads.
 
 ---
 
+## ✅ Record documents sent per stage — `Sent_Documents` table — DONE (2026-06-02)
+
+Shipped on `dev_extended`. Table created (`tblyG0gijqAN5bo5x`, 13 fields,
+reverse link `Properties.Sent_Documents`) +
+[create_sent_documents_table.py](backend/scripts/create_sent_documents_table.py),
+wired into config/TableNames/.env. New service
+[sent_documents.py](backend/app/services/sent_documents.py)
+(`record_sent` / `update_status_by_envelope` / `list_for_property`).
+Writers: library send ([library.py](backend/app/routers/library.py) — the
+`Submissions` "Library:" hack is **removed**; `/sent` reads the new table),
+PG_03 offer letter, PG_05 prescribed pack (Channel=Attachment). PG_04 webhook
+flips `Status` → Signed/Declined by `Envelope ID`. Frontend shows a status
+badge + "attachment" channel. No backfill (per decision). Live-verified:
+record → list → status-flip → cleanup. `Submissions` is now form-submissions
+only. _Original proposal below._
+
+## (proposal) Record documents sent per stage — `Sent_Documents` table
+
+**Problem.** "What documents have been sent at each stage" is currently
+recorded by overloading other tables, fragilely:
+- Library editor sends write a `Submissions` row with `Form Name =
+  "Library: {name} ({mode})"` and a **python-repr JSON string** in
+  `JSON Data` (parsed back with `ast.literal_eval` —
+  [library.py](backend/app/routers/library.py)).
+- The **stage is derived** from the catalog at read time, not stored (breaks
+  if the catalog changes; can't be queried).
+- The library send row **doesn't even set `Submitted Date`**, so the "sent"
+  list sorts on a mostly-null field.
+- **Signing status is never reflected** on the sent record — only on Property
+  flags. You can't see "this offer letter was sent, then signed/declined".
+- Prescribed-pack docs (PG_05) go to a **different** table (`Compliance`), so
+  there's no single "everything sent for this property" view.
+
+**Proposed schema — new `Sent_Documents` table** (one row per document send):
+
+| # | Field | Type | Notes |
+|---|---|---|---|
+| 1 | **Name** | singleLineText (primary) | `"{Doc Name} · {address} · {date}"`, set by writer |
+| 2 | **Property** | link → Properties | auto-creates reverse `Sent_Documents` on Properties |
+| 3 | **Doc ID** | singleLineText | catalog slug (`tpl_05`, `apt_pet_abnb`, `served_gas_cert`) |
+| 4 | **Doc Name** | singleLineText | human label |
+| 5 | **Stage** | number | 1–9, **stored** (not derived) |
+| 6 | **Channel** | singleSelect | `Sign` / `Email PDF` / `Email HTML` / `Attachment` (prescribed pack) |
+| 7 | **Recipients** | singleLineText | comma-separated emails |
+| 8 | **Sent Date** | date | actually set this time |
+| 9 | **Sent By** | singleLineText | agent email, or `system` for auto sends |
+| 10 | **PDF URL** | text | stored PDF (sign / email_pdf modes) |
+| 11 | **Envelope ID** | singleLineText | DocuSign/DocuSeal id — links status updates back |
+| 12 | **Status** | singleSelect | `Sent` / `Delivered` / `Viewed` / `Signed` / `Declined` / `Voided` |
+| 13 | **Completed Date** | date | when signed/declined |
+
+**Writers (after the table lands — implementation, not part of the schema
+approval):**
+- `library.py` send endpoint → write a `Sent_Documents` row (replaces the
+  `Submissions` "Library:" hack; `/sent` endpoint reads this table instead).
+- PG_05 prescribed-docs → write rows with `Channel = Attachment` (so the pack
+  shows up in the same per-stage view).
+- PG_03 offer letter / PG_04 contract sends → write rows.
+- **PG_04 webhook → UPDATE the matching row's `Status` + `Completed Date`** by
+  `Envelope ID` when an envelope completes/declines (envelope id is already
+  persisted as of the earlier library change — this closes the loop).
+
+**Migration:** one-time backfill of existing `Submissions` "Library:" rows →
+`Sent_Documents`, or leave them as historical (decide at build time).
+
+**Risk:** low–medium. New table + reverse link only; existing rows untouched
+until migration. Biggest payoff: a real per-stage sent-document audit with
+live signing status.
+
+**⚠ Needs your approval on the schema before I create the table** (new
+`Sent_Documents` table + the reverse link on Properties; no changes to
+existing fields).
+
+---
+
 _Generated 2026-05-24 while landing Wave A on `dev_extended`. Updated
-2026-06-01 with dashboard Phase 2/3 follow-ups and the Airtable caching
-plan (incl. the Redis/multi-worker note)._
+2026-06-01 with dashboard Phase 2/3 follow-ups, the Airtable caching plan,
+and the Sent_Documents schema proposal._

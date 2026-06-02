@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     airtable_table_gate_log: str = "tbljoHc7WkcRalZPS"
     airtable_table_compliance: str = "tblComplianceId"
     airtable_table_offers: str = "tblJLapFX84NYqAPw"  # created 2026-05-25 (offer lifecycle)
+    airtable_table_sent_documents: str = "tblyG0gijqAN5bo5x"  # created 2026-06-01 (per-stage sent docs)
 
     # --- SMTP ---------------------------------------------------------------
     smtp_host: str = ""

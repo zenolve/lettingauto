@@ -73,6 +73,13 @@ async def handle_docuseal_event(payload: dict[str, Any]) -> dict:
             "Gate Status": "Blocked",
             "Gate Block Reason": f"Document declined: {template_name}",
         })
+        # Reflect the decline on the Sent_Documents row (if one exists).
+        try:
+            from app.services.sent_documents import update_status_by_envelope  # noqa: PLC0415
+            update_status_by_envelope(data.get("submission_id") or data.get("id"),
+                                      "Declined", completed=True)
+        except Exception:  # noqa: BLE001
+            pass
         decline_warning = f"{template_name} was declined by signer."
         try:
             from app.handlers.pg00_gate import _log_gate  # local import — avoid load-time cycle
@@ -115,6 +122,15 @@ async def handle_docuseal_event(payload: dict[str, Any]) -> dict:
 
     if not completed:
         return {"ignored": True, "event": event}
+
+    # Reflect the completion on the Sent_Documents row (covers TC / TA / OFFER;
+    # runs before the OFFER early-return below).
+    try:
+        from app.services.sent_documents import update_status_by_envelope  # noqa: PLC0415
+        update_status_by_envelope(data.get("submission_id") or data.get("id"),
+                                  "Signed", completed=True)
+    except Exception:  # noqa: BLE001
+        pass
 
     # Gap 5: an OFFER-letter completion is the landlord accepting that offer.
     # Route it through the offers service so the right Offer row is Accepted,

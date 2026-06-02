@@ -264,51 +264,12 @@ def list_sent_for_property(
     property_id: str,
     _: Agent = Depends(require_agent),
 ) -> dict:
-    """Return all library-doc send events for a property, sorted newest-first.
-
-    Drives the "Documents on this stage" widget — each row links back to a
-    static PDF (when sign / email_pdf mode) and tells the agent which docs
-    have already been served from each stage.
-    """
-    import json
-    try:
-        prop = at.get(at.TableNames.PROPERTIES, property_id)
-    except Exception as e:
-        raise HTTPException(404, f"Property not found: {e}")
-    sub_ids = prop.get("fields", {}).get("Submissions") or []
-    rows: list[dict] = []
-    for sid in sub_ids:
-        try:
-            s = at.get(at.TableNames.SUBMISSIONS, sid)
-            f = s.get("fields", {})
-            name = f.get("Form Name") or ""
-            if not name.startswith("Library:"):
-                continue
-            # JSON Data is stored as a Python-repr string by the send endpoint;
-            # safest to parse with literal_eval since `str(dict)` uses single quotes.
-            import ast
-            data: dict = {}
-            try:
-                data = ast.literal_eval(f.get("JSON Data") or "{}")
-            except Exception:
-                pass
-            doc_id = data.get("doc_id")
-            doc = get_document(doc_id) if doc_id else None
-            rows.append({
-                "submission_id": sid,
-                "doc_id": doc_id,
-                "doc_name": doc.name if doc else name.replace("Library: ", ""),
-                "stage": doc.stage if doc else None,
-                "mode": data.get("mode"),
-                "title": data.get("title"),
-                "recipients": data.get("recipients") or [],
-                "pdf_url": data.get("pdf_url"),
-                "submitted_date": f.get("Submitted Date"),
-            })
-        except Exception as e:  # noqa: BLE001
-            logger.warning("library.sent_list_skip submission=%s err=%s", sid, e)
-    rows.sort(key=lambda r: r.get("submitted_date") or "", reverse=True)
-    return {"property_id": property_id, "sent": rows}
+    """Return every document sent for a property, newest-first, from the
+    structured ``Sent_Documents`` table. Drives the "Documents on this stage"
+    widget — each row carries its stage, channel, status and (for sign /
+    email_pdf) a link to the stored PDF."""
+    from app.services import sent_documents as sd  # noqa: PLC0415
+    return {"property_id": property_id, "sent": sd.list_for_property(property_id)}
 
 
 # ---------------------------------------------------------------------------
@@ -570,7 +531,7 @@ async def send_library_doc(
     doc_id: str,
     property_id: str,
     body: SendRequest,
-    _: Agent = Depends(require_agent),
+    agent: Agent = Depends(require_agent),
 ) -> dict[str, Any]:
     doc = get_document(doc_id)
     if not doc:
@@ -667,27 +628,22 @@ async def send_library_doc(
                 logger.warning("library.email_html.send_failed to=%s err=%s", r.email, e)
         result.update({"sent_to": sent})
 
-    # --- Audit row -----------------------------------------------------
-    # Persist the signing envelope id + provider so a missed Connect webhook
-    # can be recovered via POST /webhook/docusign/poll/{envelope_id} without
-    # the agent having to dig the id out of the DocuSign dashboard. (Before
-    # this, the envelope id was only echoed in the HTTP response and lost.)
+    # --- Record the send in Sent_Documents (per-stage audit) -----------
+    # Structured row instead of the old Submissions "Library:" JSON-text hack.
+    # The envelope id is stored so the signing webhook can flip Status to
+    # Signed/Declined later (PG_04). Best-effort — never breaks the send.
+    from app.services import sent_documents as sd  # noqa: PLC0415 — avoid load cycle
     submission_info = result.get("submission") or {}
-    try:
-        at.create(at.TableNames.SUBMISSIONS, {
-            "Form Name": f"Library: {doc.name} ({body.mode})",
-            "Property": [property_id],
-            "JSON Data": str({
-                "doc_id": doc_id,
-                "mode": body.mode,
-                "title": body.title,
-                "recipients": [r.email for r in body.recipients],
-                "pdf_url": result.get("pdf_url"),
-                "envelope_id": submission_info.get("id"),
-                "provider": submission_info.get("provider"),
-            }),
-        })
-    except Exception as e:  # noqa: BLE001
-        logger.warning("library.audit_create_failed err=%s", e)
-
+    sd.record_sent(
+        property_id=property_id,
+        doc_id=doc_id,
+        doc_name=doc.name,
+        stage=doc.stage,
+        channel=sd.channel_for_mode(body.mode),
+        recipients=[r.email for r in body.recipients],
+        pdf_url=result.get("pdf_url"),
+        envelope_id=submission_info.get("id"),
+        sent_by=getattr(agent, "email", None) or "agent",
+        status="Sent",
+    )
     return result

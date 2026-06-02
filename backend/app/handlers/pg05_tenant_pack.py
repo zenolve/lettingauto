@@ -186,6 +186,7 @@ async def handle_tenant_pack(property_id: str) -> dict:
     # 4. Write a Compliance audit row per document — links all tenants so
     #    multi-tenant tenancies have a complete service trail.
     served_to_str = ", ".join(sent_to) if sent_to else ""
+    from app.services.sent_documents import record_sent  # noqa: PLC0415
     for s in served:
         try:
             fields: dict = {
@@ -202,6 +203,22 @@ async def handle_tenant_pack(property_id: str) -> dict:
             at.create(at.TableNames.COMPLIANCE, fields)
         except Exception as e:  # noqa: BLE001
             logger.warning("compliance.create_failed doc=%s err=%s", s["key"], e)
+        # Also record it in Sent_Documents so the prescribed pack shows up in
+        # the per-stage sent view (Stage 7), alongside library letters.
+        try:
+            record_sent(
+                property_id=property_id,
+                doc_id=f"served_{s['key']}",
+                doc_name=s["doc"].title,
+                stage=7,
+                channel="Attachment",
+                recipients=sent_to or None,
+                pdf_url=s["url"],
+                sent_by="system",
+                status="Sent",
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.warning("sent_doc.tenant_pack_record_failed doc=%s err=%s", s["key"], e)
 
     # 5. Notify agent
     agent_email = find_stage_agent_email(7)

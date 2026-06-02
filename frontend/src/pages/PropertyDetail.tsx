@@ -477,12 +477,22 @@ type SentDoc = {
   doc_id: string;
   doc_name: string;
   stage: number | null;
-  mode: "sign" | "email_pdf" | "email_html" | null;
+  mode: "sign" | "email_pdf" | "email_html" | "attachment" | null;
   title?: string;
   recipients: string[];
   pdf_url?: string;
   submitted_date?: string;
+  status?: string;
+  completed_date?: string;
 };
+
+function SentStatusBadge({ status }: { status?: string }) {
+  if (!status || status === "Sent") return null;
+  const cls = status === "Signed" ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+    : status === "Declined" || status === "Voided" ? "bg-rose-50 text-rose-700 border-rose-200"
+    : "bg-cream-100 text-ink-soft border-cream-300";
+  return <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${cls} shrink-0`}>{status}</span>;
+}
 
 // ---------------------------------------------------------------------------
 // Gate status bar — shows the current Gate Block Reason when present, plus a
@@ -585,7 +595,10 @@ function DocumentsSentOnStage({ propertyId, stage }: { propertyId: string; stage
         {onStage.map((r) => (
           <li key={r.submission_id} className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <div className="font-medium text-slate-800 truncate">{r.doc_name}</div>
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-slate-800 truncate">{r.doc_name}</span>
+                <SentStatusBadge status={r.status} />
+              </div>
               <div className="text-xs text-slate-500 truncate">
                 {r.submitted_date} · {modeLabel(r.mode)}
                 {r.recipients.length > 0 && <> · to {r.recipients.join(", ")}</>}
@@ -604,9 +617,10 @@ function DocumentsSentOnStage({ propertyId, stage }: { propertyId: string; stage
 }
 
 function modeLabel(m: SentDoc["mode"]): string {
-  if (m === "sign") return "Signed (or sent for signing)";
+  if (m === "sign") return "Sent for signing";
   if (m === "email_pdf") return "Emailed as PDF";
   if (m === "email_html") return "Emailed as HTML";
+  if (m === "attachment") return "Attached to email";
   return "Sent";
 }
 
