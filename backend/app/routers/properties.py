@@ -76,6 +76,58 @@ def get_latest_review(property_id: str, _: Agent = Depends(require_agent)) -> di
     }
 
 
+@router.get("/{property_id}/all-warnings")
+def get_all_warnings(property_id: str, _: Agent = Depends(require_agent)) -> dict[str, Any]:
+    """Read-only recap of every warning/action ever raised on this property,
+    regardless of dismissal status.
+
+    Powers the WarningsRecap panel mounted under the Stage 7 checklist.
+    Stage 7 is the natural endpoint because no Gate_Log warnings are
+    generated after it (PG_05/06/07 don't write warnings; PG_04 webhook
+    decline events are the only theoretical post-7 source and are rare).
+
+    Sorted newest-first. Each group is one Gate_Log row.
+    """
+    try:
+        prop = at.get(at.TableNames.PROPERTIES, property_id)
+    except Exception:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Property not found")
+
+    linked_ids: list[str] = prop.get("fields", {}).get("Gate_Log", []) or []
+    if not linked_ids:
+        return {"groups": []}
+
+    def _lines(v: Any) -> list[str]:
+        if not v:
+            return []
+        return [s.strip() for s in str(v).split("\n") if s.strip()]
+
+    groups: list[dict[str, Any]] = []
+    for rid in linked_ids:
+        try:
+            row = at.get(at.TableNames.GATE_LOG, rid)
+        except Exception:
+            continue
+        f = row.get("fields", {})
+        warnings = _lines(f.get("Gate Warnings"))
+        actions = _lines(f.get("Gate Actions"))
+        if not (warnings or actions):
+            continue
+        groups.append({
+            "gate_log_id":   row["id"],
+            "source":        f.get("Gate Warnings Source") or "—",
+            "to_stage":      f.get("To_Stage"),
+            "attempted_at":  f.get("Attempted_At") or "",
+            "updated":       f.get("Gate Warnings Updated"),
+            "dismissed":     bool(f.get("Gate Warnings Dismissed")),
+            "warnings":      warnings,
+            "actions":       actions,
+        })
+
+    groups.sort(key=lambda g: g["attempted_at"], reverse=True)
+    return {"groups": groups}
+
+
 @router.post("/{property_id}/latest-review/{gate_log_id}/dismiss", status_code=status.HTTP_200_OK)
 def dismiss_review(
     property_id: str,
@@ -99,6 +151,210 @@ def dismiss_review(
         # is the sole field that hides the row from the agent UI.
     })
     return {"dismissed": gate_log_id}
+
+
+# ---------------------------------------------------------------------------
+# POST /reevaluate-gate — manual re-check after fixing data
+# ---------------------------------------------------------------------------
+# Airtable edits (or external integrations) don't trigger our gate logic, so
+# the cached Gate Status / Gate Block Reason can lag behind reality. This
+# endpoint re-derives the property's current stage from its fields and runs
+# evaluate_gate against the next stage with silent=True (no agent emails —
+# the agent is staring at the page; the response IS the feedback).
+@router.post("/{property_id}/reevaluate-gate", status_code=status.HTTP_200_OK)
+async def reevaluate_gate(
+    property_id: str,
+    _: Agent = Depends(require_agent),
+) -> dict[str, Any]:
+    from app.handlers.pg00_gate import evaluate_gate  # local import — keeps load-time graph slim
+    from app.routers.forms import _derive_current_stage_for_check  # noqa: PLC0415
+
+    # The whole point of "re-evaluate" is to reflect out-of-band Airtable edits
+    # the agent just made, so drop the cached reads for the tables the gate
+    # inspects before we re-read them.
+    at.invalidate(at.TableNames.PROPERTIES)
+    at.invalidate(at.TableNames.TENANTS)
+
+    try:
+        at.get(at.TableNames.PROPERTIES, property_id)
+    except Exception:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Property not found")
+
+    current = _derive_current_stage_for_check(property_id)
+    target = current + 1
+    # No gate to evaluate past stage 8 — TRANSITIONS stops there. But a stale
+    # "Blocked" status can linger on the property from an earlier failed
+    # evaluation (e.g. the 6→7 gate blocked while the TA was unsigned; the
+    # agent then completed signing, so the property now DERIVES to stage 8 but
+    # its cached Gate Status / Gate Block Reason still read Blocked). Since the
+    # property has cleared every tracked gate, reconcile by clearing that stale
+    # block — otherwise "Re-evaluate gate" appears to do nothing. (Reported
+    # 2026-05-25: gate still showed "TA_LL_Signed not set" after the fields
+    # were all set true in Airtable.)
+    if target > 8:
+        fresh = at.get(at.TableNames.PROPERTIES, property_id).get("fields", {})
+        cleared = False
+        if fresh.get("Gate Status") == "Blocked":
+            at.update(at.TableNames.PROPERTIES, property_id, {
+                "Gate Status": "Clear",
+                "Gate Block Reason": "",
+            })
+            cleared = True
+        return {
+            "property_id": property_id,
+            "current_stage": current,
+            "target_stage": target,
+            "no_op": True,
+            "cleared_stale_block": cleared,
+            "message": (
+                "Property has cleared every tracked gate. "
+                + ("Cleared a stale block left over from an earlier evaluation."
+                   if cleared else "No further gate to evaluate.")
+            ),
+        }
+    gate = await evaluate_gate(property_id, target_stage=target, silent=True)
+    return {
+        "property_id": property_id,
+        "current_stage": current,
+        "target_stage": target,
+        "advanced": gate.advanced,
+        "failures": gate.failures,
+    }
+
+
+# ---------------------------------------------------------------------------
+# PATCH /flags — agent toggles for gate-blocking booleans
+# ---------------------------------------------------------------------------
+# Whitelisted Properties fields the agent can edit directly from the UI. Each
+# entry declares the value type and, for ``bool_with_date``, the paired date
+# column to auto-stamp on tick and clear on untick. Adding a field here is
+# the only thing needed to expose it through the patch endpoint — the
+# frontend component looks it up via /api/properties/flags-catalog.
+# Each entry's `confirm` block (when present) tells the frontend to gate the
+# write behind a modal — used for the signing flags where bypassing the
+# pipeline has audit-trail implications.
+_SIGNING_OVERRIDE_CONFIRM = {
+    "title": "Manual signing override",
+    "body": (
+        "You are about to set this signature flag without going through the "
+        "DocuSign envelope. Make sure ALL named parties have signed (wet-ink "
+        "or via another channel) and that the signed PDF is on file before "
+        "continuing. This bypasses the normal audit trail."
+    ),
+    "confirmLabel": "Yes, mark as signed",
+    "tone": "warning",
+}
+
+PATCHABLE_FLAGS: dict[str, dict[str, Any]] = {
+    # --- Signing overrides (gates: 2→3, 3→4 for TC; 6→7 for TA) ---------
+    # Set by the DocuSign Connect webhook on the happy path. Surfaced here
+    # for wet-ink offline signing, webhook failures, retroactive migration,
+    # and amendment-resigning cases where DocuSign won't re-fire.
+    "TC_Signed":                     {"type": "bool", "label": "T&C signed (manual override)",
+                                       "confirm": _SIGNING_OVERRIDE_CONFIRM},
+    "TA_LL_Signed":                  {"type": "bool", "label": "TA signed by landlord (manual override)",
+                                       "confirm": _SIGNING_OVERRIDE_CONFIRM},
+    "TA_TT_Signed":                  {"type": "bool", "label": "TA signed by ALL tenants (manual override)",
+                                       "confirm": _SIGNING_OVERRIDE_CONFIRM},
+    # --- Stage 5 entry (offer-accepted gate) ---
+    "HMO_Licence_Confirmed":         {"type": "bool",           "label": "HMO licence confirmed"},
+    "Anti_Discrimination_Confirmed": {"type": "bool_with_date", "label": "Anti-discrimination confirmed",
+                                       "date_field": "Anti_Discrimination_Confirmed_Date"},
+    # --- Stage 7 entry (TA-signed gate) ---
+    "TDS Cert On File":              {"type": "bool",           "label": "TDS certificate on file"},
+    "Deposit Registered":            {"type": "bool_with_date", "label": "Deposit registered with TDS",
+                                       "date_field": "Deposit Registration Date"},
+    # --- Stage 8 entry (pre-move-in gate) ---
+    "funds_cleared":                 {"type": "bool",           "label": "Funds cleared"},
+    "Works_Signed_Off":              {"type": "bool",           "label": "Works signed off"},
+    # Per-doc served flags — usually flipped by the tenant-pack handler, but
+    # exposed here for cases where the doc was served outside the system.
+    "How_To_Rent_Served":            {"type": "bool",           "label": "How To Rent served"},
+    "Gas_Cert_Served":               {"type": "bool",           "label": "Gas certificate served"},
+    "EPC_Served":                    {"type": "bool",           "label": "EPC served"},
+    "EICR_Served":                   {"type": "bool",           "label": "EICR served"},
+    "TDS_Info_Served":               {"type": "bool",           "label": "TDS prescribed info served"},
+    "RRA_Sheet_Served":              {"type": "bool",           "label": "RRA sheet served (APT only)"},
+    # --- Text fields (no gate impact, but no other UI today) ---
+    "Inventory_Clerk":               {"type": "text",           "label": "Inventory clerk"},
+    "Westminster_Licence_Number":    {"type": "text",           "label": "Westminster licence number"},
+}
+
+
+@router.get("/flags-catalog")
+def flags_catalog(_: Agent = Depends(require_agent)) -> dict[str, Any]:
+    """Tell the frontend which flags exist + their metadata.
+
+    Keeps the registry in one place — the React component can render any
+    subset of these without each call site duplicating the labels."""
+    return {
+        "fields": [
+            {"name": name, **meta}
+            for name, meta in PATCHABLE_FLAGS.items()
+        ],
+    }
+
+
+@router.patch("/{property_id}/flags")
+def patch_flags(
+    property_id: str,
+    body: dict[str, Any],
+    _: Agent = Depends(require_agent),
+) -> dict[str, Any]:
+    """Apply a partial update of allow-listed Properties fields.
+
+    Body shape: ``{"funds_cleared": true, "Inventory_Clerk": "Acme"}``.
+    For each key:
+      - bool fields: coerce to True/False
+      - bool_with_date: also writes today (on tick) or null (on untick) to the
+        paired date column declared in ``PATCHABLE_FLAGS``
+      - text: pass-through; an empty string clears the field
+
+    Unknown keys → 400. We deliberately don't re-evaluate the gate here so
+    toggling a flag doesn't fire stage-advance emails — agents trigger that
+    flow explicitly via the existing form submissions.
+    """
+    if not isinstance(body, dict) or not body:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "body must be a non-empty object")
+
+    unknown = [k for k in body if k not in PATCHABLE_FLAGS]
+    if unknown:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"Field(s) not patchable: {', '.join(unknown)}",
+        )
+
+    from datetime import date as _date  # local — keep import-time graph slim
+    today = _date.today().isoformat()
+
+    payload: dict[str, Any] = {}
+    for k, raw in body.items():
+        meta = PATCHABLE_FLAGS[k]
+        t = meta["type"]
+        if t == "bool":
+            payload[k] = bool(raw)
+        elif t == "bool_with_date":
+            checked = bool(raw)
+            payload[k] = checked
+            # auto-stamp / clear the paired date column
+            payload[meta["date_field"]] = today if checked else None
+        elif t == "text":
+            payload[k] = "" if raw is None else str(raw)
+        else:  # pragma: no cover — defensive, registry is internal
+            raise HTTPException(500, f"Unknown field type {t!r} for {k}")
+
+    try:
+        at.update(at.TableNames.PROPERTIES, property_id, payload)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Airtable rejected the update: {e}")
+
+    # Re-read so the client sees Airtable's normalised values (e.g. a
+    # boolean field returns False as the literal key being absent).
+    fresh = at.get(at.TableNames.PROPERTIES, property_id).get("fields", {})
+    return {
+        "property_id": property_id,
+        "updated": {k: fresh.get(k) for k in payload},
+    }
 
 
 @router.get("/{property_id}")
@@ -129,8 +385,43 @@ def get_property(property_id: str, _: Agent = Depends(require_agent)) -> dict[st
     }
 
 
+_STAGE_NAMES = {
+    1: "Take-on", 2: "Compliance", 3: "Marketing", 4: "Offer",
+    5: "Referencing", 6: "TA Signing", 7: "Pre Move-in",
+    8: "Live Tenancy", 9: "End of Tenancy",
+}
+
+
+def _derive_stage_order_from_fields(f: dict) -> int:
+    """Stage derivation from a Property fields dict.
+
+    Keep in sync with the frontend [stages.ts:deriveCurrentStage] and the
+    backend [forms.py:_derive_current_stage_for_check] — same priorities,
+    most-advanced-state first. Inlined here to keep the dashboard list
+    endpoint a single Airtable read per page load.
+    """
+    if f.get("TA_LL_Signed") and f.get("TA_TT_Signed"):
+        return 8
+    tenant_linked = bool(f.get("Tenant"))
+    if tenant_linked and (f.get("TA_LL_Signed") or f.get("TA_TT_Signed")):
+        return 7
+    if tenant_linked and f.get("LL_Offer_Accepted"):
+        return 6
+    if tenant_linked:
+        return 5
+    if f.get("TC_Signed"):
+        return 4
+    cert_keys = ("Gas_Cert_Status", "EPC_Status", "EICR_Status")
+    if all(f.get(k) in ("On File", "Palace Gate Arranging") for k in cert_keys):
+        return 3
+    if bool(f.get("Landlords")) and any(f.get(k) for k in cert_keys):
+        return 2
+    return 1
+
+
 def _to_summary(record: dict) -> dict:
     f = record.get("fields", {})
+    stage_order = _derive_stage_order_from_fields(f)
     return {
         "id": record["id"],
         "address": f.get("Address"),
@@ -140,6 +431,8 @@ def _to_summary(record: dict) -> dict:
         "gate_block_reason": f.get("Gate Block Reason"),
         "stage_changed_at": f.get("Stage changed at"),
         "service_level": f.get("Service Level"),
+        "stage_order": stage_order,
+        "stage_name": _STAGE_NAMES.get(stage_order),
         "tc_signed": f.get("TC_Signed"),
         "ta_ll_signed": f.get("TA_LL_Signed"),
         "ta_tt_signed": f.get("TA_TT_Signed"),

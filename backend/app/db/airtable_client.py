@@ -6,6 +6,7 @@ validation later.
 """
 from __future__ import annotations
 
+import threading
 import time
 from typing import Any, Iterable
 
@@ -32,6 +33,7 @@ class TableNames:
     STAGES = "stages"
     GATE_LOG = "gate_log"
     COMPLIANCE = "compliance"
+    OFFERS = "offers"
 
 
 _TABLE_IDS = {
@@ -45,6 +47,7 @@ _TABLE_IDS = {
     TableNames.STAGES: settings.airtable_table_stages,
     TableNames.GATE_LOG: settings.airtable_table_gate_log,
     TableNames.COMPLIANCE: settings.airtable_table_compliance,
+    TableNames.OFFERS: settings.airtable_table_offers,
 }
 
 
@@ -81,40 +84,153 @@ def with_retry(fn, *args, max_tries: int = 3, delay: float = 2.0, **kwargs):
 
 
 # ---------------------------------------------------------------------------
-# Convenience CRUD wrappers
+# In-memory read cache.
+#
+# Cuts Airtable API spend — we were re-reading whole tables on every dashboard
+# load and reading the Stages table on every gate evaluation. Read-through
+# with per-table TTLs; writes bust the whole table's entries.
+#
+# NOTE (multi-worker): this cache is PER-PROCESS. It's correct for the current
+# single-process uvicorn. If you ever run multiple workers (--workers N /
+# gunicorn / horizontal scaling) each worker keeps its own cache, so a write on
+# one worker won't invalidate the others — they only self-heal within the TTL.
+# At that point, move to a shared Redis cache behind this same surface.
+#
+# Cached reads are returned BY REFERENCE — callers must treat Airtable records
+# as immutable (the codebase already builds new dicts for responses and never
+# mutates the source records).
 # ---------------------------------------------------------------------------
-def search(name: str, formula: str, max_records: int | None = None) -> list[dict]:
-    """Return matching records as a list of `{id, fields, ...}` dicts."""
+_MISS = object()
+_TTL_REFERENCE = 600    # near-static tables (Stages, Tenancy Checklist)
+_TTL_OPERATIONAL = 30   # everything else
+_REFERENCE_TABLES = {TableNames.STAGES, TableNames.CHECKLIST}
+
+# Disabled under the test env so unit tests stay deterministic.
+CACHE_ENABLED = (settings.app_env or "").lower() != "test"
+
+
+def _ttl_for(name: str) -> int:
+    return _TTL_REFERENCE if name in _REFERENCE_TABLES else _TTL_OPERATIONAL
+
+
+class _TTLCache:
+    """Tiny thread-safe TTL cache. Keys are tuples whose element [1] is the
+    table name, so a whole table can be invalidated in one pass."""
+
+    def __init__(self) -> None:
+        self._d: dict[tuple, tuple[float, Any]] = {}
+        self._lock = threading.Lock()
+
+    def get(self, key: tuple) -> Any:
+        with self._lock:
+            item = self._d.get(key)
+            if item is None:
+                return _MISS
+            expires_at, value = item
+            if time.monotonic() >= expires_at:
+                self._d.pop(key, None)
+                return _MISS
+            return value
+
+    def set(self, key: tuple, value: Any, ttl: float) -> None:
+        with self._lock:
+            self._d[key] = (time.monotonic() + ttl, value)
+
+    def invalidate_table(self, name: str) -> int:
+        with self._lock:
+            keys = [k for k in self._d if len(k) > 1 and k[1] == name]
+            for k in keys:
+                self._d.pop(k, None)
+            return len(keys)
+
+    def clear(self) -> None:
+        with self._lock:
+            self._d.clear()
+
+
+_cache = _TTLCache()
+
+
+def invalidate(name: str) -> None:
+    """Drop every cached read for a table. Called automatically by create /
+    update. Call it directly before a read that must reflect out-of-band
+    Airtable edits (e.g. the re-evaluate-gate flow)."""
+    _cache.invalidate_table(name)
+
+
+def clear_cache() -> None:
+    """Drop the whole cache (used by tests / a manual flush)."""
+    _cache.clear()
+
+
+# ---------------------------------------------------------------------------
+# Convenience CRUD wrappers (read-through cached; writes invalidate)
+# ---------------------------------------------------------------------------
+def search(name: str, formula: str, max_records: int | None = None, *, fresh: bool = False) -> list[dict]:
+    """Return matching records as a list of `{id, fields, ...}` dicts.
+
+    ``fresh=True`` bypasses the cache for this read (and does not refresh it).
+    """
+    key = ("search", name, formula, max_records)
+    if CACHE_ENABLED and not fresh:
+        hit = _cache.get(key)
+        if hit is not _MISS:
+            return hit
     t = table(name)
     if max_records:
-        return with_retry(t.all, formula=formula, max_records=max_records)
-    return with_retry(t.all, formula=formula)
+        rows = with_retry(t.all, formula=formula, max_records=max_records)
+    else:
+        rows = with_retry(t.all, formula=formula)
+    if CACHE_ENABLED and not fresh:
+        _cache.set(key, rows, _ttl_for(name))
+    return rows
 
 
-def find_first(name: str, formula: str) -> dict | None:
-    rows = search(name, formula, max_records=1)
+def find_first(name: str, formula: str, *, fresh: bool = False) -> dict | None:
+    rows = search(name, formula, max_records=1, fresh=fresh)
     return rows[0] if rows else None
 
 
-def get(name: str, record_id: str) -> dict:
-    return with_retry(table(name).get, record_id)
+def get(name: str, record_id: str, *, fresh: bool = False) -> dict:
+    key = ("get", name, record_id)
+    if CACHE_ENABLED and not fresh:
+        hit = _cache.get(key)
+        if hit is not _MISS:
+            return hit
+    val = with_retry(table(name).get, record_id)
+    if CACHE_ENABLED and not fresh:
+        _cache.set(key, val, _ttl_for(name))
+    return val
 
 
 def create(name: str, fields: dict) -> dict:
     logger.info("airtable.create table=%s keys=%s", name, list(fields))
-    return with_retry(table(name).create, fields)
+    res = with_retry(table(name).create, fields)
+    invalidate(name)
+    return res
 
 
 def update(name: str, record_id: str, fields: dict) -> dict:
     logger.info("airtable.update table=%s id=%s keys=%s", name, record_id, list(fields))
-    return with_retry(table(name).update, record_id, fields)
+    res = with_retry(table(name).update, record_id, fields)
+    invalidate(name)
+    return res
 
 
-def all_records(name: str, formula: str | None = None) -> list[dict]:
+def all_records(name: str, formula: str | None = None, *, fresh: bool = False) -> list[dict]:
+    key = ("all", name, formula)
+    if CACHE_ENABLED and not fresh:
+        hit = _cache.get(key)
+        if hit is not _MISS:
+            return hit
     t = table(name)
     if formula:
-        return with_retry(t.all, formula=formula)
-    return with_retry(t.all)
+        rows = with_retry(t.all, formula=formula)
+    else:
+        rows = with_retry(t.all)
+    if CACHE_ENABLED and not fresh:
+        _cache.set(key, rows, _ttl_for(name))
+    return rows
 
 
 # ---------------------------------------------------------------------------

@@ -2,12 +2,14 @@ import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 
 import { signOut, useAuth } from "../../lib/auth";
 import { brand } from "../../lib/brand";
+import { ConfirmDialogProvider } from "../ui/ConfirmDialog";
 
 export function AgentLayout() {
   const session = useAuth((s) => s.session);
   const nav = useNavigate();
 
   return (
+    <ConfirmDialogProvider>
     <div className="min-h-full">
       <header className="bg-cream-50 border-b border-cream-300">
         <div className="max-w-7xl mx-auto flex items-center justify-between px-6 py-4">
@@ -20,6 +22,7 @@ export function AgentLayout() {
           </Link>
           <nav className="flex items-center gap-1 text-sm">
             <NavLink to="/agent" end className={tabCls}>Dashboard</NavLink>
+            <NavLink to="/agent/properties" end className={tabCls}>Properties</NavLink>
             <NavLink to="/agent/library" className={tabCls}>Library</NavLink>
             <NavLink to="/agent/signatures" className={tabCls}>Signatures</NavLink>
             <NavLink to="/agent/properties/new" className={tabCls}>New property</NavLink>
@@ -38,6 +41,7 @@ export function AgentLayout() {
         <Outlet />
       </main>
     </div>
+    </ConfirmDialogProvider>
   );
 }
 

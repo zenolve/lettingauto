@@ -86,6 +86,21 @@ async def handle_docuseal_event(payload: dict[str, Any]) -> dict:
             )
         except Exception as e:  # noqa: BLE001
             logger.warning("docuseal.decline.log_failed err=%s", e)
+        # Gap 5: a declined OFFER letter closes the matching Offer row.
+        if kind == "OFFER":
+            try:
+                from app.services.offers import find_offer_by_envelope, close_offer  # noqa: PLC0415
+                env_id = data.get("submission_id") or data.get("id")
+                offer = find_offer_by_envelope(env_id)
+                if offer:
+                    await close_offer(
+                        offer["id"], status="Rejected_By_Landlord",
+                        reason="Landlord declined the offer letter.",
+                        void_envelope=False,  # a declined envelope can't be voided
+                        source="docusign",
+                    )
+            except Exception as e:  # noqa: BLE001
+                logger.warning("docuseal.offer_decline_close_failed err=%s", e)
         await send_agent_summary(
             find_stage_agent_email(pfields.get("Stage_Order", 4)) or "",
             subject=f"Document DECLINED — {template_name}",
@@ -100,6 +115,39 @@ async def handle_docuseal_event(payload: dict[str, Any]) -> dict:
 
     if not completed:
         return {"ignored": True, "event": event}
+
+    # Gap 5: an OFFER-letter completion is the landlord accepting that offer.
+    # Route it through the offers service so the right Offer row is Accepted,
+    # its tenants are linked to the property, and rival Pending offers are
+    # superseded. Falls back to the legacy LL_Offer_Accepted flag if no Offer
+    # row exists (pre-Gap-5 data).
+    if kind == "OFFER":
+        try:
+            from app.services.offers import (  # noqa: PLC0415
+                accept_offer, find_offer_by_envelope, offers_for_property,
+            )
+            env_id = data.get("submission_id") or data.get("id")
+            offer = find_offer_by_envelope(env_id)
+            if not offer:
+                pend = [o for o in offers_for_property(property_id)
+                        if o.get("fields", {}).get("Status") == "Pending"]
+                offer = pend[0] if pend else None
+            if offer:
+                res = await accept_offer(offer["id"], source="docusign")
+                await send_agent_summary(
+                    find_stage_agent_email(4) or "",
+                    subject=f"Offer accepted — {template_name}",
+                    template="E07_document_signed.html",
+                    context={
+                        "property_address": pfields.get("Address"),
+                        "doc_title": template_name, "kind": kind, "submitters": submitters,
+                    },
+                )
+                return {"property_id": property_id, "kind": kind,
+                        "offer_accepted": offer["id"], "gate": res.get("gate")}
+        except Exception as e:  # noqa: BLE001
+            logger.warning("docuseal.offer_accept_failed err=%s — falling back", e)
+        # fall through to legacy flag-set below if no offer row / on error
 
     update: dict[str, Any] = {}
 
@@ -126,6 +174,29 @@ async def handle_docuseal_event(payload: dict[str, Any]) -> dict:
                 continue
             tt = at.find_first(at.TableNames.TENANTS, at.eq("Tenant Email", email))
             if tt:
+                # Per-tenant signature. On a joint tenancy EVERY named tenant
+                # must sign before the tenant side of the TA is complete — a
+                # single signer no longer advances the property.
+                try:
+                    at.update(at.TableNames.TENANTS, tt["id"], {"TA_Signed": True})
+                except Exception as e:  # noqa: BLE001
+                    logger.warning("ta.tenant_sign_mark_failed id=%s err=%s", tt["id"], e)
+        # Roll up to the property: TA_TT_Signed becomes True only once *all*
+        # linked tenants have TA_Signed. (Manual override still works — the
+        # PropertyFlags toggle sets TA_TT_Signed directly.)
+        tenant_ids = pfields.get("Tenant") or []
+        if tenant_ids:
+            all_signed = True
+            for tid in tenant_ids:
+                try:
+                    tf = at.get(at.TableNames.TENANTS, tid).get("fields", {})
+                except Exception:
+                    all_signed = False
+                    break
+                if not tf.get("TA_Signed"):
+                    all_signed = False
+                    break
+            if all_signed:
                 update["TA_TT_Signed"] = True
 
     elif kind == "OFFER":

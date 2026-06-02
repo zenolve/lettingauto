@@ -13,6 +13,7 @@ import PropertyTakeon from "./pages/forms/PropertyTakeon";
 import LibraryEditor from "./pages/LibraryEditor";
 import LibraryIndex from "./pages/LibraryIndex";
 import Login from "./pages/Login";
+import Properties from "./pages/Properties";
 import PropertyDetail from "./pages/PropertyDetail";
 import PropertyUploads from "./pages/PropertyUploads";
 import Signatures from "./pages/Signatures";
@@ -32,6 +33,7 @@ export default function App() {
       {/* Agent app */}
       <Route element={<RequireAuth><AgentLayout /></RequireAuth>}>
         <Route path="/agent" element={<Dashboard />} />
+        <Route path="/agent/properties" element={<Properties />} />
         <Route path="/agent/signatures" element={<Signatures />} />
         <Route path="/agent/library" element={<LibraryIndex />} />
         <Route path="/agent/library/:docId" element={<TemplateEditor />} />

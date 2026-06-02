@@ -668,6 +668,11 @@ async def send_library_doc(
         result.update({"sent_to": sent})
 
     # --- Audit row -----------------------------------------------------
+    # Persist the signing envelope id + provider so a missed Connect webhook
+    # can be recovered via POST /webhook/docusign/poll/{envelope_id} without
+    # the agent having to dig the id out of the DocuSign dashboard. (Before
+    # this, the envelope id was only echoed in the HTTP response and lost.)
+    submission_info = result.get("submission") or {}
     try:
         at.create(at.TableNames.SUBMISSIONS, {
             "Form Name": f"Library: {doc.name} ({body.mode})",
@@ -678,6 +683,8 @@ async def send_library_doc(
                 "title": body.title,
                 "recipients": [r.email for r in body.recipients],
                 "pdf_url": result.get("pdf_url"),
+                "envelope_id": submission_info.get("id"),
+                "provider": submission_info.get("provider"),
             }),
         })
     except Exception as e:  # noqa: BLE001

@@ -147,6 +147,11 @@ _add(
     signers=["Landlord", "Tenant"],
     description="APT tenancy agreement, current variant covering pet and short-let restrictions.",
     tenancy_types=["APT"],   # only relevant when the property is APT
+    # Four distinct signing anchors baked into the execution block of the body
+    # (Landlord / Tenant / Guarantor / Witness). Without this the default
+    # ["/sig1/","/sig2/"] would wrap a 3rd/4th signer back onto the first two
+    # markers, stacking tabs. See the execution block in apt_pet_abnb.html.
+    anchor_strings=["/sig1/", "/sig2/", "/sig3/", "/sig4/"],
 )
 _add(
     id="common_law_ta",
@@ -158,6 +163,9 @@ _add(
     signers=["Landlord", "Tenant"],
     description="Common-law tenancy agreement for annual rents >£100k (not Housing-Act covered).",
     tenancy_types=["Common Law"],  # only relevant when the property is Common Law
+    # Body carries /sig1/../sig5/ (LL x2, TT, Guarantor x2). Map them so extra
+    # signers don't wrap onto the first two anchors.
+    anchor_strings=["/sig1/", "/sig2/", "/sig3/", "/sig4/", "/sig5/"],
 )
 
 # --- All 44 TPLs from the master doc, mapped to stages ----------------------

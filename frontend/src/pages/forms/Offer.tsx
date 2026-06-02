@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useEffect, useState } from "react";
+import { useFieldArray, useForm } from "react-hook-form";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { BackLink } from "../../components/ui/BackLink";
@@ -27,22 +27,47 @@ type FormValues = {
   guarantor_email?: string;
   is_student: boolean;
   anti_discrimination_confirmed: boolean;
+  // Joint tenants who sign the same tenancy (maps to backend OfferInput.co_tenants).
+  co_tenants: { full_name: string; email: string; address?: string; is_student: boolean }[];
 };
 
 export default function Offer() {
   const { id = "" } = useParams();
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const { register, handleSubmit, control, watch, setValue, formState: { errors, isSubmitting } } = useForm<FormValues>({
     defaultValues: {
       rent_frequency: "Monthly",
       rent_in_advance_months: 1,
       number_of_occupants: 1,
       is_student: false,
       anti_discrimination_confirmed: false,
+      co_tenants: [],
     },
   });
+  const { fields: coTenantFields, append: appendCoTenant, remove: removeCoTenant } =
+    useFieldArray({ control, name: "co_tenants" });
+
+  // Live HMO indicator: total = max(stated occupants, 1 lead + named co-tenants).
+  // Mirrors the backend rule (HMO_Flag when total >= 3). Updates as the agent
+  // adds/removes tenants or edits the occupant count.
+  const statedOccupants = Number(watch("number_of_occupants")) || 1;
+  const totalTenants = Math.max(statedOccupants, 1 + coTenantFields.length);
+  const hmoTriggered = totalTenants >= 3;
   const [result, setResult] = useState<any>(null);
   const [serverError, setServerError] = useState<string | null>(null);
   const nav = useNavigate();
+
+  // Default rent_frequency from whatever was captured at take-on (PG_01).
+  // In practice the offer's frequency almost always matches; the agent can
+  // still override here if it doesn't.
+  useEffect(() => {
+    if (!id) return;
+    api.get<{ fields: Record<string, any> }>(`/api/properties/${id}`)
+      .then((r) => {
+        const f = r.data?.fields?.["Rent Frequency"];
+        if (f === "Monthly" || f === "Weekly") setValue("rent_frequency", f);
+      })
+      .catch(() => { /* non-fatal — falls back to the hard-coded default */ });
+  }, [id, setValue]);
 
   async function onSubmit(v: FormValues) {
     setServerError(null);
@@ -60,6 +85,13 @@ export default function Offer() {
     body.holding_deposit = Number(v.holding_deposit);
     body.rent_in_advance_months = Number(v.rent_in_advance_months);
     body.number_of_occupants = Number(v.number_of_occupants);
+    // Keep only fully-filled co-tenant rows — the backend CoTenantInput requires
+    // name + email, so a blank/partial row would 422.
+    const coTenants = (v.co_tenants ?? []).filter(
+      (ct) => ct?.full_name?.trim() && ct?.email?.trim(),
+    );
+    if (coTenants.length) body.co_tenants = coTenants;
+    else delete body.co_tenants;
     try {
       const { data } = await api.post(`/api/forms/offer/${id}`, body);
       setResult(data);
@@ -96,6 +128,65 @@ export default function Offer() {
         <Field label="Is student?">
           <label className="flex items-center gap-2"><input type="checkbox" {...register("is_student")} /> Yes</label>
         </Field>
+      </Section>
+
+      <Section
+        title="Additional tenants (joint tenancy)"
+        description="Add anyone else who will sign the same tenancy. Each becomes a referenced tenant on the property; the lead tenant above is included automatically. 3+ total triggers the HMO flag.">
+        {coTenantFields.length === 0 && (
+          <p className="text-sm text-ink-muted">No additional tenants — the lead tenant above is the sole tenant.</p>
+        )}
+        <div className="space-y-4">
+          {coTenantFields.map((row, i) => (
+            <div key={row.id} className="rounded-lg border border-cream-300 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs uppercase tracking-wide text-slate-500">Tenant {i + 2}</span>
+                <button type="button" className="text-xs text-rose-600 hover:underline" onClick={() => removeCoTenant(i)}>
+                  Remove
+                </button>
+              </div>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <Field label="Full name" required error={errors.co_tenants?.[i]?.full_name?.message}>
+                  <input className="input" {...register(`co_tenants.${i}.full_name` as const, { required: "Required" })} />
+                </Field>
+                <Field label="Email" required error={errors.co_tenants?.[i]?.email?.message}>
+                  <input className="input" type="email" {...register(`co_tenants.${i}.email` as const, { required: "Required" })} />
+                </Field>
+                <Field label="Address (optional)">
+                  <input className="input" {...register(`co_tenants.${i}.address` as const)} />
+                </Field>
+                <Field label="Is student?">
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" {...register(`co_tenants.${i}.is_student` as const)} /> Yes
+                  </label>
+                </Field>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 flex items-center justify-between gap-3 flex-wrap">
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => appendCoTenant({ full_name: "", email: "", address: "", is_student: false })}>
+            + Add tenant
+          </button>
+          <span className="text-xs text-ink-muted">
+            {totalTenants} tenant{totalTenants === 1 ? "" : "s"} / occupant{totalTenants === 1 ? "" : "s"} total
+          </span>
+        </div>
+        {hmoTriggered && (
+          <div className="mt-3 flex items-start gap-2.5 rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-900">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="mt-0.5 shrink-0" aria-hidden="true">
+              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            <div className="text-sm">
+              <strong>HMO licence required.</strong> {totalTenants} tenants/occupants (3 or more) means this is a
+              House in Multiple Occupation. On submit the property is flagged <code>HMO</code> and a critical
+              “Confirm HMO licence” checklist item is added — the offer can’t advance to move-in until it’s confirmed.
+            </div>
+          </div>
+        )}
       </Section>
 
       <Section title="Tenancy">

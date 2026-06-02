@@ -298,6 +298,28 @@ async def create_envelope(
     return out
 
 
+async def void_envelope(envelope_id: str, reason: str) -> dict[str, Any]:
+    """Void a sent envelope (e.g. when its offer is withdrawn/rejected).
+
+    Only works while the envelope is still ``sent``/``delivered`` — a
+    ``completed`` or already-``declined`` envelope can't be voided and DocuSign
+    returns an error, which the caller should treat as non-fatal.
+    """
+    token = await _get_access_token()
+    base_path = _normalise_base_path(settings.docusign_base_path)
+    url = f"{base_path}/v2.1/accounts/{settings.docusign_account_id}/envelopes/{envelope_id}"
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.put(
+            url,
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            json={"status": "voided", "voidedReason": (reason or "Voided")[:200]},
+        )
+    if r.status_code >= 300:
+        raise RuntimeError(f"DocuSign void failed ({r.status_code}): {r.text[:200]}")
+    logger.info("docusign.envelope.voided id=%s", envelope_id)
+    return r.json()
+
+
 async def get_envelope_status(envelope_id: str) -> dict[str, Any]:
     """Fetch the current envelope state — handy when the Connect webhook hasn't
     landed yet (e.g. ngrok not running) and the agent wants to manually pull."""

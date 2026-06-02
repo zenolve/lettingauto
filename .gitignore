@@ -3,6 +3,9 @@ __pycache__/
 *.pyc
 .env
 .env.local
+# Private keys / certs — must never be committed (e.g. backend/docusign_rsa.key).
+*.key
+*.pem
 node_modules/
 dist/
 .vite/

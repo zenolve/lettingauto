@@ -46,6 +46,8 @@ export type PropertySummary = {
   gate_block_reason?: string;
   stage_changed_at?: string;
   service_level?: string;
+  stage_order?: number;
+  stage_name?: string;
   tc_signed?: boolean;
   ta_ll_signed?: boolean;
   ta_tt_signed?: boolean;
@@ -57,4 +59,40 @@ export type PropertyDetail = {
   fields: Record<string, any>;
   landlords: Array<Record<string, any>>;
   tenant: Record<string, any> | null;
+};
+
+export type DashboardData = {
+  generated_at: string;
+  act_now: {
+    gate_blocked: number;
+    offers_pending: number;
+    certs_expiring_30d: number;
+    referencing_pending: number;
+    movein_ready: number;
+    overdue_diary: number;
+  };
+  pipeline: {
+    by_stage: { order: number; name?: string; count: number }[];
+    split: { pre_tenancy: number; active: number; ending: number };
+    total: number;
+    stalled: { property_id: string; address?: string; stage_order: number; stage_name?: string; days_stuck: number }[];
+  };
+  compliance: {
+    breakdown: { compliant: number; expiring: number; bad: number };
+    expiry_runway: { property_id: string; address?: string; cert: string; expiry: string; days_left: number }[];
+    epc_fg: number;
+    hmo_unconfirmed: number;
+  };
+  upcoming: {
+    diary_agenda: { property_id?: string; address?: string; type?: string; alert_date: string; days_until: number; message?: string }[];
+    overdue_count: number;
+  };
+  portfolio: {
+    active_tenancies: number;
+    rent_roll_annual: number;
+    rent_roll_monthly: number;
+    tenancy_type_split: Record<string, number>;
+    service_level_split: Record<string, number>;
+    offer_conversion: Record<string, number>;
+  };
 };

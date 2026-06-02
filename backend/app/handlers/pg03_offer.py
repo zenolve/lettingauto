@@ -196,9 +196,14 @@ async def handle_offer(property_id: str, payload: OfferInput) -> dict:
     #    the stated count and the actual linked tenant count to be safe.
     total_tenants = max(payload.number_of_occupants, 1 + len(co_tenant_ids))
     all_tenant_ids = [tenant_id] + co_tenant_ids
+    hdd_iso = holding_deposit_deadline().isoformat()
+    # Gap 5: do NOT set Properties.Tenant here. The tenant link is assigned only
+    # when an offer is *accepted* (services/offers.accept_offer), so multiple
+    # competing Pending offers no longer clobber each other. We still set the
+    # property-level flags derived from the offer (HMO, anti-discrimination,
+    # holding-deposit deadline) so the gate/compliance picture stays correct.
     property_update: dict = {
-        "Tenant": all_tenant_ids,
-        "Holding_Deposit_Deadline": holding_deposit_deadline().isoformat(),
+        "Holding_Deposit_Deadline": hdd_iso,
     }
     if total_tenants >= 3:
         property_update["HMO_Flag"] = True
@@ -206,6 +211,32 @@ async def handle_offer(property_id: str, payload: OfferInput) -> dict:
         property_update["Anti_Discrimination_Confirmed"] = True
         property_update["Anti_Discrimination_Confirmed_Date"] = date.today().isoformat()
     at.update(at.TableNames.PROPERTIES, property_id, property_update)
+
+    # 3b. Offer-chase diary (Gap 2) — the landlord may neither sign nor decline
+    #     the offer letter. Nothing else reads Holding_Deposit_Deadline, so the
+    #     statutory 15-day holding-deposit clock can quietly run out. Schedule a
+    #     chase 7 days out; PG_06 fires it to the stage agent. Uses the existing
+    #     "Reminder" Diary_Type (singleSelect has no "Offer Chase" option — a
+    #     dedicated type would be a one-option schema add later).
+    try:
+        from datetime import timedelta  # noqa: PLC0415
+        chase_date = (date.today() + timedelta(days=7)).isoformat()
+        deadline = hdd_iso
+        at.create(at.TableNames.DIARY, {
+            "Diary_Type": "Reminder",
+            "Property": [property_id],
+            "Diary Date": date.today().isoformat(),
+            "Alert_Date": chase_date,
+            "Alert_Message": (
+                f"Offer chase — landlord has not yet signed the offer letter for "
+                f"{pfields.get('Address', '')}. Holding-deposit deadline {deadline}. "
+                f"Chase or refund before the 15-day limit."
+            ),
+            "Assigned_To": find_stage_agent_email(4) or settings.admin_email,
+            "Fired": False,
+        })
+    except Exception as e:  # noqa: BLE001
+        logger.warning("offer.chase_diary_failed err=%s", e)
 
     if total_tenants >= 3:
         at.create(at.TableNames.CHECKLIST, {
@@ -253,6 +284,34 @@ async def handle_offer(property_id: str, payload: OfferInput) -> dict:
                 docuseal_url = submitters[0].get("embed_src") or submitters[0].get("url")
     except Exception as e:  # noqa: BLE001
         logger.error("docuseal.offer_letter_failed err=%s", e)
+
+    # 4b. Create the Offer row (Gap 5). Snapshots the commercial terms + the
+    #     offer-letter envelope/submission id so the lifecycle (accept / reject
+    #     / withdraw, competing offers) is tracked independently of
+    #     Properties.Tenant. The landlord signing the offer letter (PG_04) — or
+    #     the agent via /api/offers/{id}/accept — flips this Pending offer to
+    #     Accepted and only then links the tenants to the property.
+    offer_id: str | None = None
+    try:
+        from app.services.offers import create_offer  # noqa: PLC0415 — avoid load cycle
+        envelope_id = (docuseal_response or {}).get("id")
+        offer_id = create_offer(
+            property_id=property_id,
+            tenant_ids=all_tenant_ids,
+            lead_tenant_name=payload.tenant_full_name,
+            monthly_rent=payload.monthly_rent,
+            rent_frequency=payload.rent_frequency,
+            deposit_amount=payload.deposit_amount,
+            holding_deposit=payload.holding_deposit,
+            start_date=payload.start_date.isoformat(),
+            end_date=payload.end_date.isoformat() if payload.end_date else None,
+            tenancy_term=payload.tenancy_term,
+            holding_deposit_deadline=hdd_iso,
+            envelope_id=envelope_id,
+            agent_email=find_stage_agent_email(4),
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.error("offer.row_create_failed err=%s", e)
 
     # 5. Submissions audit
     at.create(at.TableNames.SUBMISSIONS, {
@@ -304,6 +363,7 @@ async def handle_offer(property_id: str, payload: OfferInput) -> dict:
 
     return {
         "tenant_id": tenant_id,
+        "offer_id": offer_id,
         "co_tenant_ids": co_tenant_ids,
         "violations": [],
         "docuseal_url": docuseal_url,

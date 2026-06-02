@@ -1,12 +1,15 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 
 import { BrowseLibrary } from "../components/ui/BrowseLibrary";
 import { FileUploader } from "../components/ui/FileUploader";
+import { PropertyFlags } from "../components/ui/PropertyFlags";
 import { ReferencingPanel } from "../components/ui/ReferencingPanel";
 import { ReviewPanel } from "../components/ui/ReviewPanel";
 import { StagePipeline } from "../components/ui/StagePipeline";
+import { OffersPanel } from "../components/ui/OffersPanel";
 import { TenancyChecklist } from "../components/ui/TenancyChecklist";
+import { WarningsRecap } from "../components/ui/WarningsRecap";
 import { api, PropertyDetail as PD } from "../lib/api";
 import { deriveCurrentStage, resolveViewStage, stageByOrder } from "../lib/stages";
 
@@ -23,11 +26,16 @@ export default function PropertyDetail() {
   const [data, setData] = useState<PD | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  useEffect(() => {
+  // PropertyFlags toggles call this to re-fetch the property record so any
+  // stage-derivation that depends on the toggled field (e.g. flipping
+  // funds_cleared changes the served-flags badge) updates immediately.
+  const refresh = useCallback(() => {
     api.get<PD>(`/api/properties/${id}`)
       .then((r) => setData(r.data))
       .catch((e) => setErr(e.response?.data?.detail ?? "Failed to load"));
   }, [id]);
+
+  useEffect(() => { refresh(); }, [refresh]);
 
   if (err) return <div className="card p-4 text-rose-700 bg-rose-50">{err}</div>;
   if (!data) return <div>Loading…</div>;
@@ -68,11 +76,13 @@ export default function PropertyDetail() {
 
       <ReviewPanel propertyId={id} />
 
-      {f["Gate Status"] === "Blocked" && f["Gate Block Reason"] && (
-        <div className="card p-4 bg-rose-50 border-rose-200 text-rose-800">
-          <strong>Blocked:</strong> {f["Gate Block Reason"]}
-        </div>
-      )}
+      <GateStatusBar
+        propertyId={id}
+        gateStatus={f["Gate Status"]}
+        gateBlockReason={f["Gate Block Reason"]}
+        onUpdated={refresh}
+      />
+
 
       <header className="flex items-end justify-between border-b border-slate-200 pb-2">
         <div>
@@ -88,7 +98,7 @@ export default function PropertyDetail() {
 
       <DocumentsSentOnStage propertyId={id} stage={viewing} />
 
-      {renderStage(viewing, id, data, current)}
+      {renderStage(viewing, id, data, current, refresh)}
     </div>
   );
 }
@@ -96,17 +106,19 @@ export default function PropertyDetail() {
 // ---------------------------------------------------------------------------
 // Stage routing — `current` is the property's actual derived stage, used to
 // gate critical actions (you can't "Send tenant pack" until stage 7).
+// `refresh` re-fetches the property record so PropertyFlags toggles + other
+// in-stage mutations propagate through the rest of the UI.
 // ---------------------------------------------------------------------------
-function renderStage(stage: number, id: string, data: PD, current: number) {
+function renderStage(stage: number, id: string, data: PD, current: number, refresh: () => void) {
   switch (stage) {
     case 1: return <Stage1Takeon data={data} />;
-    case 2: return <Stage2Compliance id={id} data={data} />;
-    case 3: return <Stage3Marketing id={id} data={data} />;
-    case 4: return <Stage4Offer id={id} data={data} current={current} />;
+    case 2: return <Stage2Compliance id={id} data={data} refresh={refresh} />;
+    case 3: return <Stage3Marketing id={id} data={data} refresh={refresh} />;
+    case 4: return <Stage4Offer id={id} data={data} current={current} refresh={refresh} />;
     case 5: return <Stage5Referencing id={id} data={data} current={current} />;
-    case 6: return <Stage6TASigning id={id} data={data} />;
-    case 7: return <Stage7PreMovein id={id} data={data} current={current} />;
-    case 8: return <Stage8Live id={id} data={data} />;
+    case 6: return <Stage6TASigning id={id} data={data} refresh={refresh} />;
+    case 7: return <Stage7PreMovein id={id} data={data} current={current} refresh={refresh} />;
+    case 8: return <Stage8Live id={id} data={data} refresh={refresh} />;
     case 9: return <Stage9End id={id} data={data} />;
     default: return null;
   }
@@ -135,12 +147,28 @@ function Stage1Takeon({ data }: { data: PD }) {
   );
 }
 
-function Stage2Compliance({ id, data }: { id: string; data: PD }) {
+function Stage2Compliance({ id, data, refresh }: { id: string; data: PD; refresh: () => void }) {
   const f = data.fields;
+  // Pick the primary landlord (first linked) for the AML/NRL panel. Multi-
+  // landlord properties show only the primary here; secondary landlords can
+  // be edited via Airtable for now (uncommon edge case).
+  const primaryLandlord = data.landlords?.[0];
   return (
     <div className="grid md:grid-cols-2 gap-6">
       <ComplianceCard f={f} />
       <UploadsCard propertyId={id} />
+      {primaryLandlord && (
+        <PropertyFlags
+          entityId={primaryLandlord.id}
+          fields={primaryLandlord}
+          show={["Verification Status", "ID_Name_Match", "NRL_Approval_Number"]}
+          title={`Landlord review — ${primaryLandlord["Full Name"] ?? "unnamed"}`}
+          description="AML decision + NRL approval number. Flipping ID match off 'Pending' stamps AML_Check_Date and AML_Checked_By automatically."
+          catalogPath="/api/landlords/flags-catalog"
+          patchPath={`/api/landlords/${primaryLandlord.id}/flags`}
+          onUpdated={refresh}
+        />
+      )}
       <section className="card p-5">
         <h3 className="text-sm uppercase tracking-wide text-slate-500 mb-3">Add a document</h3>
         <p className="text-sm text-slate-600 mb-3">
@@ -157,7 +185,7 @@ function Stage2Compliance({ id, data }: { id: string; data: PD }) {
   );
 }
 
-function Stage3Marketing({ id, data }: { id: string; data: PD }) {
+function Stage3Marketing({ id, data, refresh }: { id: string; data: PD; refresh: () => void }) {
   const f = data.fields;
   const [photoCount, setPhotoCount] = useState(0);
   const [planCount, setPlanCount] = useState(0);
@@ -191,6 +219,14 @@ function Stage3Marketing({ id, data }: { id: string; data: PD }) {
         accept="application/pdf,image/*"
         onChange={(files) => setPlanCount(files.length)}
       />
+      <PropertyFlags
+        entityId={id}
+        fields={f}
+        show={["TC_Signed", "Westminster_Licence_Number"]}
+        title="Stage gate + licensing"
+        description="TC manual override for offline/wet-ink signing. Westminster licence number if the property falls under that council's licensing."
+        onUpdated={refresh}
+      />
       <Placeholder
         title="Portals checklist"
         body="Rightmove / Zoopla / LonRes / palacegate.com tick-list. Not yet implemented — see IMPLEMENTATION_STATUS.md step 31."
@@ -203,10 +239,13 @@ function Stage3Marketing({ id, data }: { id: string; data: PD }) {
   );
 }
 
-function Stage4Offer({ id, data, current }: { id: string; data: PD; current: number }) {
+function Stage4Offer({ id, data, current, refresh }: { id: string; data: PD; current: number; refresh: () => void }) {
   const f = data.fields;
   const tenant = data.tenant;
   const offerLocked = current < 4;
+  // HMO licence only matters when the offer flagged 3+ occupants. Show the
+  // toggle then, plus anti-discrim (used by the APT stage-5 gate).
+  const flagsToShow = ["Anti_Discrimination_Confirmed", ...(f["HMO_Flag"] ? ["HMO_Licence_Confirmed"] : [])];
   return (
     <div className="grid md:grid-cols-2 gap-6">
       <PropertyCard f={f} compact />
@@ -228,6 +267,15 @@ function Stage4Offer({ id, data, current }: { id: string; data: PD; current: num
           muted={offerLocked}
         />
       )}
+      <PropertyFlags
+        propertyId={id}
+        fields={f}
+        show={flagsToShow}
+        title="Stage 5 gate flags"
+        description="Tick once confirmed. APT properties need anti-discrimination confirmation; HMOs need the licence on file before the offer can advance."
+        onUpdated={refresh}
+      />
+      <OffersPanel propertyId={id} onChanged={refresh} />
       <section className="card p-5">
         <h3 className="text-sm uppercase tracking-wide text-slate-500 mb-3">Send to landlord / tenant</h3>
         <p className="text-sm text-slate-600 mb-3">Offer confirmation, referencing request, and acceptance letters.</p>
@@ -250,7 +298,7 @@ function Stage5Referencing({ id, data, current }: { id: string; data: PD; curren
   );
 }
 
-function Stage6TASigning({ id, data }: { id: string; data: PD }) {
+function Stage6TASigning({ id, data, refresh }: { id: string; data: PD; refresh: () => void }) {
   const f = data.fields;
   return (
     <div className="grid md:grid-cols-2 gap-6">
@@ -272,11 +320,27 @@ function Stage6TASigning({ id, data }: { id: string; data: PD }) {
           <Link to={`/agent/properties/${id}/contracts/ta`} className="text-navy-600 hover:underline">open →</Link>
         </div>
       </Card>
+      <PropertyFlags
+        propertyId={id}
+        fields={f}
+        show={["TDS Cert On File", "Deposit Registered"]}
+        title="Deposit & TDS"
+        description="Both required before the property can advance to Stage 7 (Pre Move-in). Ticking 'Deposit Registered' auto-stamps today's date — required by the Housing Act 2004 30-day rule."
+        onUpdated={refresh}
+      />
+      <PropertyFlags
+        propertyId={id}
+        fields={f}
+        show={["TA_LL_Signed", "TA_TT_Signed"]}
+        title="TA signing — manual override"
+        description="DocuSign normally flips these. Use only for wet-ink signing, webhook failures, retroactive migration, or amendments. Each toggle requires confirmation."
+        onUpdated={refresh}
+      />
     </div>
   );
 }
 
-function Stage7PreMovein({ id, data, current }: { id: string; data: PD; current: number }) {
+function Stage7PreMovein({ id, data, current, refresh }: { id: string; data: PD; current: number; refresh: () => void }) {
   const f = data.fields;
   const locked = current < 7;
   return (
@@ -314,6 +378,16 @@ function Stage7PreMovein({ id, data, current }: { id: string; data: PD; current:
           </>
         )}
       </Card>
+      <div className="md:col-span-2">
+        <PropertyFlags
+          propertyId={id}
+          fields={f}
+          show={["funds_cleared", "Works_Signed_Off", "Inventory_Clerk"]}
+          title="Pre-move-in checks"
+          description="Tick once each is in place — these are gate conditions for advancing into Stage 8 (Live Tenancy)."
+          onUpdated={refresh}
+        />
+      </div>
       <section className="card p-5 md:col-span-2">
         <h3 className="text-sm uppercase tracking-wide text-slate-500 mb-3">Move-in correspondence</h3>
         <p className="text-sm text-slate-600 mb-3">Welcome letter, check-in confirmation, bank/standing-order, utility transfer.</p>
@@ -323,11 +397,27 @@ function Stage7PreMovein({ id, data, current }: { id: string; data: PD; current:
       <div className="md:col-span-2">
         <TenancyChecklist propertyId={id} />
       </div>
+      <div className="md:col-span-2">
+        <WarningsRecap propertyId={id} />
+      </div>
     </div>
   );
 }
 
-function Stage8Live({ id, data }: { id: string; data: PD }) {
+function Stage8Live({ id, data, refresh }: { id: string; data: PD; refresh: () => void }) {
+  const f = data.fields;
+  const isApt = f["Tenancy Type"] === "APT";
+  // Per-doc served flags: usually set automatically by the tenant-pack
+  // handler, but exposed here for manual override (e.g. document served
+  // outside the system, or the system missed an event).
+  const servedFlags = [
+    "How_To_Rent_Served",
+    "Gas_Cert_Served",
+    "EPC_Served",
+    "EICR_Served",
+    "TDS_Info_Served",
+    ...(isApt ? ["RRA_Sheet_Served"] : []),
+  ];
   return (
     <div className="grid md:grid-cols-2 gap-6">
       <Card title="Tenancy">
@@ -341,6 +431,16 @@ function Stage8Live({ id, data }: { id: string; data: PD }) {
         ) : <span className="text-sm text-slate-500">No tenant linked.</span>}
       </Card>
       <DiaryCard propertyId={id} />
+      <div className="md:col-span-2">
+        <PropertyFlags
+          propertyId={id}
+          fields={f}
+          show={servedFlags}
+          title="Prescribed documents served"
+          description="The tenant-pack flow auto-ticks these. Override here if a document was served outside the system or to correct a missed event."
+          onUpdated={refresh}
+        />
+      </div>
       <section className="card p-5 md:col-span-2">
         <h3 className="text-sm uppercase tracking-wide text-slate-500 mb-3">Send during the tenancy</h3>
         <p className="text-sm text-slate-600 mb-3">
@@ -383,6 +483,91 @@ type SentDoc = {
   pdf_url?: string;
   submitted_date?: string;
 };
+
+// ---------------------------------------------------------------------------
+// Gate status bar — shows the current Gate Block Reason when present, plus a
+// "Re-evaluate" button that re-runs the gate logic against current field
+// values. Use case: agent fixed an expired cert in Airtable; without this
+// the cached Gate Status / Gate Block Reason stay stale forever.
+// ---------------------------------------------------------------------------
+function GateStatusBar({ propertyId, gateStatus, gateBlockReason, onUpdated }: {
+  propertyId: string;
+  gateStatus?: string;
+  gateBlockReason?: string;
+  onUpdated: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [flash, setFlash] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const blocked = gateStatus === "Blocked" && !!gateBlockReason;
+
+  async function reevaluate() {
+    setBusy(true); setErr(null); setFlash(null);
+    try {
+      const { data } = await api.post(`/api/properties/${propertyId}/reevaluate-gate`);
+      if (data.no_op) {
+        setFlash(data.message ?? "Property is at the final tracked stage.");
+      } else if (data.advanced) {
+        setFlash(`Gate cleared — advanced to Stage ${data.target_stage}.`);
+      } else if (data.failures?.length) {
+        setFlash(`Still blocked (${data.failures.length} condition${data.failures.length === 1 ? "" : "s"} unmet).`);
+      } else {
+        setFlash("No change.");
+      }
+      onUpdated();
+    } catch (e: any) {
+      setErr(e?.response?.data?.detail ?? "Re-evaluation failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // When not blocked and there's nothing to flash, render nothing — keep the
+  // page quiet on the happy path.
+  if (!blocked && !flash && !err) return null;
+
+  return (
+    <div className="space-y-2">
+      {blocked && (
+        <div className="card p-4 bg-rose-50 border-rose-200 text-rose-800 flex items-start justify-between gap-3">
+          <div>
+            <strong>Blocked:</strong> {gateBlockReason}
+          </div>
+          <button
+            type="button"
+            className="text-xs px-3 py-1.5 rounded border border-rose-300 bg-white text-rose-800 hover:bg-rose-100 disabled:opacity-50 shrink-0"
+            onClick={reevaluate}
+            disabled={busy}>
+            {busy ? "Re-checking…" : "Re-evaluate gate"}
+          </button>
+        </div>
+      )}
+      {!blocked && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            className="btn-ghost text-xs"
+            onClick={reevaluate}
+            disabled={busy}>
+            {busy ? "Re-checking…" : "Re-evaluate gate"}
+          </button>
+        </div>
+      )}
+      {flash && (
+        <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-3 py-1.5">
+          {flash}
+        </div>
+      )}
+      {err && (
+        <div className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded px-3 py-1.5">
+          {err}
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 function DocumentsSentOnStage({ propertyId, stage }: { propertyId: string; stage: number }) {
   const [rows, setRows] = useState<SentDoc[]>([]);

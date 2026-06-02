@@ -70,7 +70,7 @@ async def webhook_landlord_admin(req: Request) -> dict:
     if not property_id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Hidden 'id' field missing")
     payload = LandlordAdminInput(
-        property_post_code=get_by_label(fields, "property postal code") or "",
+        # property_post_code field retired in Wave A — already on Property record from PG_01
         block_manager_name=get_by_label(fields, "block manager name"),
         block_manager_address=get_by_label(fields, "block manager address"),
         block_manager_postal_code=get_by_label(fields, "block manager postal code"),
@@ -135,7 +135,10 @@ async def webhook_landlord_verification(req: Request) -> dict:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Hidden 'id' field missing")
     payload = LandlordVerificationInput(
         individual_or_company=get_by_label(fields, "individual or company") or "Individual",
-        residency=get_by_label(fields, "residency status") or "",
+        # residency retired from this form in Wave B — the handler reads it from
+        # the landlord's UK_Resident_Status (PG_02). Legacy Tally payloads may
+        # still carry it, so pass it through when present as a fallback.
+        residency=get_by_label(fields, "residency status") or None,
         id_document_type=get_by_label(fields, "id document type"),
         id_document_upload=get_by_label(fields, "id document upload"),
         visa_snapshot=get_by_label(fields, "visa snapshot"),
@@ -335,3 +338,104 @@ async def webhook_tenant_pack(req: Request) -> dict:
     if not pid:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "property_id required")
     return await handle_tenant_pack(pid)
+
+
+# ---------------------------------------------------------------------------
+# Paragon — inbound referencing outcome (Gap 3)
+# ---------------------------------------------------------------------------
+@router.post("/webhook/paragon")
+async def webhook_paragon(req: Request) -> dict:
+    """Receive a Paragon referencing result and record it against the tenant.
+
+    Payload (matches ``core.paragon_client.mock_paragon_outcome``):
+        {"reference_number": "PRG-...", "outcome": "Pass|Conditional|Fail",
+         "tenant_email": "...", "completed_at": "..."}
+
+    Behaviour:
+      - Match the tenant by ``Referencing_Paragon_Ref`` (fallback: Tenant Email).
+      - Write ``Referencing_Status`` = the outcome (the singleSelect options are
+        exactly Pass/Conditional/Fail).
+      - ``Referencing_Recorded`` is set True only for Pass/Conditional. A **Fail**
+        leaves it False so the Stage 5→6 gate stays blocked until the agent
+        re-references (e.g. after adding a guarantor) — the gate condition is
+        "outcome recorded", and we don't want a failed reference to satisfy it.
+      - On Conditional/Fail, surface a guarantor-required warning via the gate
+        evaluation (no dedicated Guarantor_Required column exists today).
+      - Re-evaluate the Stage 5→6 gate so a Pass advances automatically.
+
+    Auth: real Paragon would HMAC-sign; in mock mode there's no secret. If
+    ``PARAGON_WEBHOOK_SECRET`` is configured we require it as ``?token=``.
+    """
+    from app.db import airtable_client as at  # noqa: PLC0415
+    from app.handlers.pg00_gate import evaluate_gate  # noqa: PLC0415
+
+    secret = (getattr(settings, "paragon_webhook_secret", "") or "").strip()
+    if secret:
+        qs_token = req.query_params.get("token", "")
+        if qs_token != secret:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Invalid Paragon webhook token")
+
+    body = await req.json()
+    ref = (body.get("reference_number") or "").strip()
+    outcome = (body.get("outcome") or "").strip().title()  # "pass" → "Pass"
+    if outcome not in ("Pass", "Conditional", "Fail"):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"outcome must be one of Pass/Conditional/Fail (got {outcome!r})",
+        )
+
+    # Locate the tenant: by Paragon ref first, then email.
+    tenant = None
+    if ref:
+        tenant = at.find_first(at.TableNames.TENANTS, at.eq("Referencing_Paragon_Ref", ref))
+    if not tenant and body.get("tenant_email"):
+        tenant = at.find_first(at.TableNames.TENANTS, at.eq("Tenant Email", body["tenant_email"]))
+    if not tenant:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            f"No tenant matched Paragon reference {ref!r} (or tenant_email).",
+        )
+
+    tenant_id = tenant["id"]
+    tf = tenant.get("fields", {})
+    recorded = outcome in ("Pass", "Conditional")
+    at.update(at.TableNames.TENANTS, tenant_id, {
+        "Referencing_Status": outcome,
+        "Referencing_Recorded": recorded,
+    })
+
+    # Guarantor warning for non-clean outcomes.
+    warnings: list[str] = []
+    actions: list[str] = []
+    if outcome in ("Conditional", "Fail"):
+        has_guar = bool((tf.get("Guarantor_Name") or "").strip())
+        warnings.append(
+            f"Referencing {outcome} for {tf.get('Name') or tenant_id} — guarantor "
+            f"{'on file' if has_guar else 'REQUIRED (none on file)'}."
+        )
+        if not has_guar:
+            actions.append("Collect guarantor details and instruct a guarantor reference.")
+
+    # Re-evaluate the Stage 5→6 gate (Pass advances; Fail stays blocked).
+    gate_out = None
+    prop_ids = tf.get("Property Id") or []
+    property_id = prop_ids[0] if prop_ids else None
+    if property_id:
+        gate = await evaluate_gate(
+            property_id, target_stage=6,
+            warnings=warnings or None,
+            actions=actions or None,
+            source=f"Paragon referencing ({outcome})",
+        )
+        gate_out = gate.to_dict()
+
+    logger.info("paragon.outcome tenant=%s ref=%s outcome=%s recorded=%s",
+                tenant_id, ref, outcome, recorded)
+    return {
+        "paragon": True,
+        "tenant_id": tenant_id,
+        "outcome": outcome,
+        "referencing_recorded": recorded,
+        "guarantor_warning": bool(warnings),
+        "gate": gate_out,
+    }

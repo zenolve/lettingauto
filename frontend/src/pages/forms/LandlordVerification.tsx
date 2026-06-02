@@ -8,7 +8,7 @@ import { publicApi } from "../../lib/api";
 
 type Form = {
   individual_or_company: "Individual" | "Company";
-  residency: string;
+  // residency removed in Wave B — read from tokenInfo.residency (captured on PG_02)
   id_document_type?: string;
   id_document_upload?: string;
   visa_snapshot?: string;
@@ -66,7 +66,9 @@ export default function LandlordVerification() {
   }, [token]);
 
   const isCompany = watch("individual_or_company") === "Company";
-  const residency = watch("residency");
+  // Residency is no longer a form field (Wave B) — it comes from the token's
+  // landlord dereference (UK_Resident_Status set during PG_02).
+  const residency: string | undefined = tokenInfo?.residency;
 
   async function onSubmit(values: Form) {
     setServerError(null);
@@ -125,13 +127,13 @@ export default function LandlordVerification() {
             <option>Company</option>
           </select>
         </Field>
-        <Field label="Residency status" required>
-          <select className="input" {...register("residency", { required: true })}>
-            <option value="">—</option>
-            <option>UK Resident</option>
-            <option>Non-resident (overseas)</option>
-          </select>
-        </Field>
+        {/* Residency is no longer asked here — it was captured on your admin
+            form. Shown read-only for context (drives whether a visa is needed). */}
+        {residency && (
+          <Field label="Residency status" hint="Taken from your admin form. Contact us if this is wrong.">
+            <input className="input bg-cream-100" readOnly value={residency} />
+          </Field>
+        )}
       </Section>
 
       <Section title="Identity">

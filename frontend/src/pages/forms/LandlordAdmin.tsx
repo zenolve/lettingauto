@@ -30,7 +30,7 @@ type YN = "Yes" | "No";
  *   • Alternative access textarea — gated on supply_keys = No
  */
 type AdminForm = {
-  property_post_code: string;
+  // (property_post_code retired in Wave A — already on Property record from PG_01)
   // block manager
   block_manager_name?: string;
   block_manager_address?: string;
@@ -135,12 +135,17 @@ export default function LandlordAdmin() {
   const [tokenInfo, setTokenInfo] = useState<any>(null);
   const [tokenError, setTokenError] = useState<string | null>(null);
 
-  // Prefill landlord_email from the JWT once it loads — the link was sent to
-  // that address, so it is authoritative. Keeps a user from mistakenly typing
-  // their own email into the Block Manager Email field above.
+  // Prefill landlord_email + landlord_full_name from the JWT/landlord
+  // dereference once it loads. The email is the address the link was sent to
+  // (authoritative, kept readonly). The name was captured by the agent at
+  // take-on; we prefill it editable so the landlord can correct a typo
+  // without re-typing the whole thing.
   useEffect(() => {
     if (tokenInfo?.email) {
       setValue("landlord_email", tokenInfo.email);
+    }
+    if (tokenInfo?.landlord_full_name) {
+      setValue("landlord_full_name", tokenInfo.landlord_full_name);
     }
   }, [tokenInfo, setValue]);
 
@@ -235,7 +240,11 @@ export default function LandlordAdmin() {
 
       {/* ============================ Landlord identity (FIRST) ========== */}
       <Section title="Your information (Landlord)">
-        <Field label="Full name" required error={errors.landlord_full_name?.message}>
+        <Field
+          label="Full name"
+          required
+          error={errors.landlord_full_name?.message}
+          hint="Prefilled from the details on your invitation — please correct if it's wrong.">
           <input className="input" {...register("landlord_full_name", { required: "Required" })} />
         </Field>
         <Field label="Full address" required error={errors.landlord_full_address?.message}>
@@ -255,12 +264,8 @@ export default function LandlordAdmin() {
         </Field>
       </Section>
 
-      {/* ============================ Property ============================ */}
-      <Section title="Property details">
-        <Field label="Property postal code" required error={errors.property_post_code?.message}>
-          <input className="input" {...register("property_post_code", { required: "Required" })} />
-        </Field>
-      </Section>
+      {/* (Property details section retired in Wave A — postcode is on the
+           Property record from PG_01, no need to re-ask the landlord.) */}
 
       {/* ============================ Block manager ====================== */}
       <Section

@@ -188,6 +188,7 @@ async def evaluate_gate(
     warnings: list[str] | None = None,
     actions: list[str] | None = None,
     source: str | None = None,
+    silent: bool = False,
 ) -> GateResult:
     """Evaluate the gate for the given property record and target stage.
 
@@ -200,6 +201,11 @@ async def evaluate_gate(
     compliance/review pass, pass the resulting non-blocking warnings/actions
     through so they land on the same Gate_Log row. The agent UI reads the
     latest Gate_Log row and surfaces these to the user.
+
+    `silent` (default False): when True, skip the agent-summary email. The
+    Gate_Log row is still written for audit. Used by the manual
+    "Re-evaluate gate" button on the property page, so re-running the check
+    after fixing data doesn't spam the agent's inbox.
     """
     prop = at.get(at.TableNames.PROPERTIES, property_id)
     fields = prop.get("fields", {})
@@ -225,19 +231,21 @@ async def evaluate_gate(
             property_id, target_stage, passed=False, reasons=failures,
             warnings=warnings, actions=actions, source=source,
         )
-        agent_email = find_stage_agent_email(target_stage)
-        await send_agent_summary(
-            agent_email or "",
-            subject=f"Gate blocked — Stage {target_stage} — {fields.get('Address', '')}",
-            template="E12_gate_blocked.html",
-            context={
-                "property_address": fields.get("Address"),
-                "target_stage": target_stage,
-                "failures": failures,
-                "warnings": failures,
-            },
-        )
-        logger.info("gate.blocked property=%s target=%s failures=%s", property_id, target_stage, failures)
+        if not silent:
+            agent_email = find_stage_agent_email(target_stage)
+            await send_agent_summary(
+                agent_email or "",
+                subject=f"Gate blocked — Stage {target_stage} — {fields.get('Address', '')}",
+                template="E12_gate_blocked.html",
+                context={
+                    "property_address": fields.get("Address"),
+                    "target_stage": target_stage,
+                    "failures": failures,
+                    "warnings": failures,
+                },
+            )
+        logger.info("gate.blocked property=%s target=%s failures=%s silent=%s",
+                    property_id, target_stage, failures, silent)
         return GateResult(advanced=False, target_stage=target_stage, failures=failures)
 
     # Success — advance
@@ -253,18 +261,19 @@ async def evaluate_gate(
         property_id, target_stage, passed=True, reasons=[],
         warnings=warnings, actions=actions, source=source,
     )
-    agent_email = find_stage_agent_email(target_stage)
-    await send_agent_summary(
-        agent_email or "",
-        subject=f"Stage {target_stage} reached — {fields.get('Address', '')}",
-        template="E13_stage_advanced.html",
-        context={
-            "property_address": fields.get("Address"),
-            "target_stage": target_stage,
-            "flags": [],
-        },
-    )
-    logger.info("gate.advanced property=%s target=%s", property_id, target_stage)
+    if not silent:
+        agent_email = find_stage_agent_email(target_stage)
+        await send_agent_summary(
+            agent_email or "",
+            subject=f"Stage {target_stage} reached — {fields.get('Address', '')}",
+            template="E13_stage_advanced.html",
+            context={
+                "property_address": fields.get("Address"),
+                "target_stage": target_stage,
+                "flags": [],
+            },
+        )
+    logger.info("gate.advanced property=%s target=%s silent=%s", property_id, target_stage, silent)
     return GateResult(advanced=True, target_stage=target_stage, failures=[])
 
 

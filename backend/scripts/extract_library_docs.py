@@ -1,84 +1,101 @@
 """One-shot extractor for the document library.
 
-Reads the source .docx / .doc files from `~/Downloads` and writes their bodies
-out as HTML under `backend/app/templates/library/`. Re-run whenever a source
-document changes.
+Reads the source .docx files from `~/Downloads` and writes their bodies out as
+HTML under `backend/app/templates/library/`. Re-run whenever a source document
+changes.
 
 Strategy:
-- .docx -&gt; parse `word/document.xml` directly (paragraphs + tables). No external
-  dep beyond stdlib.
-- .doc  -&gt; call out to antiword if available, otherwise leave a stub.
+- ``.docx``  — uses **mammoth** to map Word styles → semantic HTML. This preserves
+  heading hierarchy (Heading1/2/3 → ``<h1>/<h2>/<h3>``), numbered & bullet lists
+  (Word's complex w:numId machinery → real ``<ol>`` / ``<ul>``), tables, runs
+  (bold/italic/underline). The hand-rolled XML walker this replaces produced
+  walls of ``<p>`` and dropped all clause numbering — see commit history.
+- ``.doc``   (legacy binary) — antiword fallback, plain-text only. Tell the
+  agent to save the file as .docx in Word and re-run; mammoth doesn't read
+  the binary format and the antiword output is poor for legal contracts.
+
+Add a new source: drop the .docx in ~/Downloads, append to ``SOURCE_FILES``,
+re-run ``python -m scripts.extract_library_docs``.
 """
 from __future__ import annotations
 
 import shutil
 import subprocess
 import sys
-import xml.etree.ElementTree as ET
-import zipfile
 from pathlib import Path
 
-NS = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
-
 SOURCE_FILES: dict[str, Path] = {
-    # doc_id -&gt; source file on disk
+    # doc_id  -> source file on disk
     "pg_tcs_2026":   Path.home() / "Downloads" / "PG T and C's Final 2026(1).docx",
-    "apt_pet_abnb":  Path.home() / "Downloads" / "APT Pet ABNB v3.0 Final.docx",
-    "common_law_ta": Path.home() / "Downloads" / "Tenancy Agreement Common Law December 2020(1).doc",
+    "apt_pet_abnb":  Path.home() / "Downloads" / "APT Pet ABNB v3.0 Final (1).docx",
+    "common_law_ta": Path.home() / "Downloads" / "Tenancy Agreement Common Law December 2020 (1).docx",
 }
 
 
-def _para_text(el) -> str:
-    parts: list[str] = []
-    for t in el.iter(f"{{{NS['w']}}}t"):
-        if t.text:
-            parts.append(t.text)
-    return "".join(parts)
+# Mammoth style map. Each line maps a Word paragraph style (LHS) to an HTML
+# element (RHS). Unmapped styles fall through to <p>.
+# Discovered styles in our actual contracts: Heading1, Title, Boldsubheading,
+# Calibrisubheadinggreen, Paragraph, Parasubclause2, Schedule, Testimonium,
+# Text, Untitledsubclause1/2/3. We collapse the various sub-clause/sub-heading
+# styles into semantic equivalents so the editor renders a hierarchy the agent
+# can follow.
+MAMMOTH_STYLE_MAP = """
+p[style-name='Title'] => h1.legal-title:fresh
+p[style-name='Heading 1'] => h1:fresh
+p[style-name='Heading1'] => h1:fresh
+p[style-name='Heading 2'] => h2:fresh
+p[style-name='Heading2'] => h2:fresh
+p[style-name='Heading 3'] => h3:fresh
+p[style-name='Heading3'] => h3:fresh
+p[style-name='Schedule'] => h2.schedule:fresh
+p[style-name='Boldsubheading'] => h3:fresh
+p[style-name='Calibrisubheadinggreen'] => h4:fresh
+p[style-name='Untitledsubclause1'] => p.subclause-1:fresh
+p[style-name='Untitledsubclause2'] => p.subclause-2:fresh
+p[style-name='Untitledsubclause3'] => p.subclause-3:fresh
+p[style-name='Parasubclause2'] => p.subclause-2:fresh
+p[style-name='Testimonium'] => p.testimonium:fresh
+r[style-name='Bold'] => strong
+r[style-name='Strong'] => strong
+"""
 
 
 def docx_to_html(path: Path) -> str:
-    """Render a .docx body to a minimal HTML string.
+    """Render a .docx via mammoth using the project style map.
 
-    Paragraphs become <p>, tables become <table>. Bold runs preserved.
-    No images, no styles beyond bold — enough for an editor to load and the
-    user to tweak.
+    Mammoth handles numbered lists (`w:numId` references in the doc map back to
+    `<ol>` / `<ul>` with the right nesting), so legal-clause numbering survives
+    intact — that's the whole reason for this rewrite.
     """
-    with zipfile.ZipFile(path) as z:
-        with z.open("word/document.xml") as f:
-            tree = ET.parse(f)
-    body = tree.getroot().find(f"{{{NS['w']}}}body")
-    if body is None:
-        return ""
+    import mammoth  # local import — only the extractor script needs it
 
-    lines: list[str] = []
-    for child in body:
-        tag = child.tag.split("}", 1)[-1]
-        if tag == "p":
-            txt = _para_text(child)
-            if not txt.strip():
-                lines.append("<p>&nbsp;</p>")
-            else:
-                # Promote ALL-CAPS short paragraphs to headings — keeps the
-                # editor readable without parsing every w:pStyle.
-                stripped = txt.strip()
-                if len(stripped) < 80 and stripped == stripped.upper() and any(c.isalpha() for c in stripped):
-                    lines.append(f"<h3>{stripped}</h3>")
-                else:
-                    lines.append(f"<p>{stripped}</p>")
-        elif tag == "tbl":
-            lines.append("<table border='1' cellpadding='4' cellspacing='0' style='border-collapse:collapse;width:100%;margin:8px 0;'>")
-            for row in child.findall(f"{{{NS['w']}}}tr"):
-                cells = [_para_text(c).strip() for c in row.findall(f"{{{NS['w']}}}tc")]
-                lines.append("<tr>" + "".join(f"<td style='vertical-align:top;'>{c or '&nbsp;'}</td>" for c in cells) + "</tr>")
-            lines.append("</table>")
-    return "\n".join(lines)
+    with path.open("rb") as f:
+        result = mammoth.convert_to_html(f, style_map=MAMMOTH_STYLE_MAP)
+    for msg in result.messages:
+        # Mammoth flags unmapped styles + unsupported features as warnings;
+        # surface them so we know what's still being dropped.
+        print(f"[mammoth-warn] {path.name}: {msg.message}", file=sys.stderr)
+    return result.value
 
 
 def doc_to_html(path: Path) -> str:
-    """Render a legacy .doc file via antiword. Falls back to a stub if missing."""
+    """Last-resort fallback for legacy .doc binaries via antiword.
+
+    The output is plain text — no tables, no styles, no list numbering. For
+    legal contracts this is genuinely unusable; the script prints a warning
+    so the user is told to save the file as .docx instead.
+    """
     antiword = shutil.which("antiword")
     if not antiword:
-        return "<p><em>(Could not extract — antiword not installed. Install antiword or save the .doc as .docx to import.)</em></p>"
+        return (
+            "<p><em>(Could not extract — antiword not installed. "
+            "Save the .doc as .docx in Word and re-run the extractor.)</em></p>"
+        )
+    print(
+        f"[warn] {path.name}: legacy .doc detected. Output will lose clause "
+        f"numbering, tables, and merge fields. Save it as .docx and re-run.",
+        file=sys.stderr,
+    )
     try:
         text = subprocess.check_output(
             [antiword, "-w", "100", str(path)],
@@ -118,7 +135,7 @@ def main() -> None:
             continue
         target = out_dir / f"{doc_id}.html"
         target.write_text(html, encoding="utf-8")
-        print(f"[ok]   {doc_id}: {len(html)} chars -&gt; {target}")
+        print(f"[ok]   {doc_id}: {len(html)} chars -> {target}")
 
 
 if __name__ == "__main__":

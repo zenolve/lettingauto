@@ -56,8 +56,9 @@ class LandlordAdminInput(BaseModel):
     returned URLs. (Tally storage links are no longer used.)
     """
 
-    # property + block manager
-    property_post_code: str
+    # block manager
+    # (Property postcode was previously asked here but is already on the
+    # Property record from PG_01 — removed in Wave A consolidation.)
     block_manager_name: Optional[str] = None
     block_manager_address: Optional[str] = None
     block_manager_postal_code: Optional[str] = None
@@ -181,7 +182,11 @@ class LandlordVerificationInput(BaseModel):
     """
 
     individual_or_company: str  # Individual / Company
-    residency: str
+    # Residency is no longer asked on this form (Wave B consolidation) — PG_02
+    # already captured it and it's stored on the Landlord as UK_Resident_Status.
+    # Kept optional so the legacy Tally webhook shim can still pass it and the
+    # handler can fall back to it if the landlord record somehow lacks a status.
+    residency: Optional[str] = None
 
     id_document_type: Optional[str] = None
     id_document_upload: Optional[str] = None

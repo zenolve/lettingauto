@@ -11,8 +11,11 @@ from app.routers import (
     auth,
     checklist,
     contracts,
+    dashboard,
     forms,
+    landlords,
     library,
+    offers,
     properties,
     referencing,
     signatures,
@@ -40,12 +43,15 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(auth.router)
+    app.include_router(dashboard.router)
     app.include_router(properties.router)
     app.include_router(forms.router)
     app.include_router(contracts.router)
     app.include_router(library.router)
     app.include_router(referencing.router)
     app.include_router(checklist.router)
+    app.include_router(landlords.router)
+    app.include_router(offers.router)
     app.include_router(signatures.router)
     app.include_router(uploads.router)
     app.include_router(webhooks.router)

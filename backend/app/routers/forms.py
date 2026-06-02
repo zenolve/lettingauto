@@ -82,6 +82,59 @@ def _require_stage(property_id: str, required: int, action: str) -> None:
         )
 
 
+def _require_not_gate_blocked(property_id: str, action: str) -> None:
+    """Raise 409 if the property's cached Gate Status is Blocked.
+
+    Reads the cached value (not a fresh re-evaluation) — agents already have
+    the "Re-evaluate gate" button on the property page for that. If the
+    cached state is stale, the agent can clear it via the UI before retry.
+    """
+    from app.db import airtable_client as at  # local import — avoid cycles
+    try:
+        prop = at.get(at.TableNames.PROPERTIES, property_id)
+    except Exception:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Property not found")
+    f = prop.get("fields", {})
+    if f.get("Gate Status") == "Blocked":
+        reason = (f.get("Gate Block Reason") or "").strip() or "(no reason recorded)"
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"Gate is blocked — '{action}' cannot proceed. Block reason: {reason}. "
+            f"Resolve the blocker (or re-evaluate the gate if data has been fixed) and try again.",
+        )
+
+
+def _require_checklist_complete(property_id: str, action: str) -> None:
+    """Raise 409 unless every Tenancy Checklist catalog item is ticked.
+
+    The catalog is small and stable, so a per-call fetch is fine. The check
+    is "every item in the catalog is linked into Properties.Tenancy
+    Checklist". applies_to-based filtering isn't wired yet (see
+    [checklist.py] roadmap note), so today every item applies.
+    """
+    from app.db import airtable_client as at  # local import — avoid cycles
+    try:
+        prop = at.get(at.TableNames.PROPERTIES, property_id)
+    except Exception:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Property not found")
+    try:
+        catalog = at.all_records(at.TableNames.CHECKLIST)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            f"Failed to read checklist catalog: {e}")
+    ticked = set(prop.get("fields", {}).get("Tenancy Checklist") or [])
+    missing = [r for r in catalog if r["id"] not in ticked]
+    if missing:
+        names = [r.get("fields", {}).get("Name") or "(unnamed)" for r in missing]
+        preview = ", ".join(names[:5])
+        more = f" (and {len(names) - 5} more)" if len(names) > 5 else ""
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"Tenancy checklist incomplete — '{action}' requires every item ticked. "
+            f"Outstanding: {preview}{more}.",
+        )
+
+
 @router.post("/offer/{property_id}", status_code=status.HTTP_201_CREATED)
 async def submit_offer(
     property_id: str,
@@ -97,7 +150,10 @@ async def submit_tenant_pack(
     property_id: str,
     _: Agent = Depends(require_agent),
 ) -> dict:
-    _require_stage(property_id, required=7, action="Send tenant pack")
+    action = "Send tenant pack"
+    _require_stage(property_id, required=7, action=action)
+    _require_not_gate_blocked(property_id, action=action)
+    _require_checklist_complete(property_id, action=action)
     return await handle_tenant_pack(property_id)
 
 

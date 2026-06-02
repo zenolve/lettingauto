@@ -37,7 +37,10 @@ async def run_scheduler(batch_size: int = 100) -> dict:
     skipped = 0
     for row in rows:
         f = row.get("fields", {})
-        diary_type = f.get("Type")
+        # Field is "Diary_Type" (singleSelect) in the live base — reading "Type"
+        # always returned None, so every alert fired with the generic template
+        # and a "Diary alert: None" subject. Fixed 2026-05-25.
+        diary_type = f.get("Diary_Type")
         assigned = f.get("Assigned_To") or settings.admin_email
         template = _DIARY_TYPE_TO_TEMPLATE.get(diary_type, "E11_generic.html")
         try:

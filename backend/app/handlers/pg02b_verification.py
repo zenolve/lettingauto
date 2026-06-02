@@ -51,7 +51,14 @@ async def handle_verification(
     landlord_id = landlord["id"]
 
     isCompany = (payload.individual_or_company or "").lower().startswith("comp")
-    isOverseas = is_overseas(payload.residency)
+    # Wave B: residency is no longer collected on this form. Source it from the
+    # UK_Resident_Status PG_02 already wrote to the landlord record; only fall
+    # back to a payload value (legacy Tally webhook) if the record lacks one.
+    stored_status = (landlord.get("fields", {}).get("UK_Resident_Status") or "").strip()
+    if stored_status:
+        isOverseas = stored_status == "Non-resident"
+    else:
+        isOverseas = is_overseas(payload.residency)
     sof_lower = (payload.source_of_funds or "").strip().lower()
     edd = sof_lower in _HIGH_RISK_SOURCES
 
