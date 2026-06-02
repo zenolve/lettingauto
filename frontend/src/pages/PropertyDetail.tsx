@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { BrowseLibrary } from "../components/ui/BrowseLibrary";
+import { useConfirm } from "../components/ui/ConfirmDialog";
 import { FileUploader } from "../components/ui/FileUploader";
 import { PropertyFlags } from "../components/ui/PropertyFlags";
 import { ReferencingPanel } from "../components/ui/ReferencingPanel";
@@ -99,7 +100,74 @@ export default function PropertyDetail() {
       <DocumentsSentOnStage propertyId={id} stage={viewing} />
 
       {renderStage(viewing, id, data, current, refresh)}
+
+      <DangerZone propertyId={id} address={f["Address"]} />
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Danger zone — permanent cascade delete behind a danger confirmation modal.
+// ---------------------------------------------------------------------------
+function DangerZone({ propertyId, address }: { propertyId: string; address?: string }) {
+  const confirm = useConfirm();
+  const nav = useNavigate();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function onDelete() {
+    const ok = await confirm({
+      title: "Delete this property permanently?",
+      tone: "danger",
+      confirmLabel: "Delete everything",
+      cancelLabel: "Keep property",
+      body: (
+        <div className="space-y-2">
+          <p>
+            This permanently deletes <strong>{address || "this property"}</strong> and{" "}
+            <strong>everything linked to it</strong>. This cannot be undone.
+          </p>
+          <p className="text-sm">The following are erased:</p>
+          <ul className="text-sm list-disc ml-5 space-y-0.5">
+            <li>All tenants &amp; offers (including past/competing offers)</li>
+            <li>Diary entries, compliance &amp; financial records</li>
+            <li>Gate history, form submissions &amp; sent documents</li>
+            <li>All uploaded files for this property</li>
+            <li>The landlord, if this is their only property</li>
+          </ul>
+        </div>
+      ),
+    });
+    if (!ok) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      await api.delete(`/api/properties/${propertyId}`);
+      nav("/agent/properties");
+    } catch (e: any) {
+      setErr(e?.response?.data?.detail ?? "Delete failed");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="card p-5 border-rose-200 bg-rose-50/40 mt-2">
+      <h3 className="font-serif text-base font-semibold text-rose-800">Danger zone</h3>
+      <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-ink-soft max-w-xl">
+          Permanently delete this property and all of its tenants, offers, documents, records and
+          uploaded files. This action cannot be undone.
+        </p>
+        <button
+          type="button"
+          onClick={onDelete}
+          disabled={busy}
+          className="shrink-0 px-4 py-2 rounded-md bg-rose-600 hover:bg-rose-700 text-white text-sm font-medium disabled:opacity-50">
+          {busy ? "Deleting…" : "Delete property"}
+        </button>
+      </div>
+      {err && <p className="text-xs text-rose-700 mt-2">{err}</p>}
+    </section>
   );
 }
 

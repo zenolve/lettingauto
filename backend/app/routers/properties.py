@@ -6,9 +6,11 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.auth import Agent, require_agent
+from app.core.logger import get_logger
 from app.db import airtable_client as at
 
 router = APIRouter(prefix="/api/properties", tags=["properties"])
+logger = get_logger(__name__)
 
 
 @router.get("/")
@@ -355,6 +357,94 @@ def patch_flags(
         "property_id": property_id,
         "updated": {k: fresh.get(k) for k in payload},
     }
+
+
+@router.delete("/{property_id}", status_code=status.HTTP_200_OK)
+def delete_property(property_id: str, _: Agent = Depends(require_agent)) -> dict[str, Any]:
+    """Permanently delete a property and everything that belongs to it.
+
+    Cascade: all linked Tenants (accepted + every offer's applicants), Offers,
+    Diary entries, Compliance rows, Financials, Gate_Log, Submissions and
+    Sent_Documents, plus the uploaded-files directory. A linked Landlord is
+    deleted only when this was their **sole** property — otherwise it's left in
+    place (Airtable clears the link automatically). Shared catalog links
+    (Tenancy Checklist) are not deleted, only unlinked.
+
+    Irreversible. The frontend gates this behind a danger confirmation modal.
+    """
+    try:
+        prop = at.get(at.TableNames.PROPERTIES, property_id, fresh=True)
+    except Exception:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Property not found")
+    f = prop.get("fields", {})
+    deleted: dict[str, int] = {}
+
+    # Tenants: union of the accepted link + every offer's applicants.
+    tenant_ids: set[str] = set(f.get("Tenant") or [])
+    offer_ids: list[str] = list(f.get("Offers") or [])
+    for oid in offer_ids:
+        try:
+            of = at.get(at.TableNames.OFFERS, oid).get("fields", {})
+            tenant_ids.update(of.get("Tenants") or [])
+        except Exception:
+            pass
+
+    cascades: list[tuple[str, list[str]]] = [
+        (at.TableNames.TENANTS, list(tenant_ids)),
+        (at.TableNames.OFFERS, offer_ids),
+        (at.TableNames.DIARY, list(f.get("Diary") or [])),
+        (at.TableNames.COMPLIANCE, list(f.get("Compliance") or [])),
+        (at.TableNames.FINANCIALS, list(f.get("Financials") or [])),
+        (at.TableNames.GATE_LOG, list(f.get("Gate_Log") or [])),
+        (at.TableNames.SUBMISSIONS, list(f.get("Submissions") or [])),
+        (at.TableNames.SENT_DOCUMENTS, list(f.get("Sent_Documents") or [])),
+    ]
+    for tbl, ids in cascades:
+        n = 0
+        for rid in ids:
+            try:
+                at.delete(tbl, rid)
+                n += 1
+            except Exception as e:  # noqa: BLE001
+                logger.warning("delete.cascade_failed table=%s id=%s err=%s", tbl, rid, e)
+        deleted[tbl] = n
+
+    # Landlords: delete only if this property is their only one. Read fresh —
+    # a cached landlord record could show a stale Properties list (e.g. a
+    # property deleted seconds ago), and getting this wrong on a destructive
+    # op would either orphan a landlord or wrongly delete one with other
+    # properties.
+    ll_deleted = 0
+    for lid in f.get("Landlords") or []:
+        try:
+            ll = at.get(at.TableNames.LANDLORDS, lid, fresh=True).get("fields", {})
+            others = [p for p in (ll.get("Properties") or []) if p != property_id]
+            if not others:
+                at.delete(at.TableNames.LANDLORDS, lid)
+                ll_deleted += 1
+        except Exception as e:  # noqa: BLE001
+            logger.warning("delete.landlord_failed id=%s err=%s", lid, e)
+    deleted["landlords"] = ll_deleted
+
+    # Uploaded files + the per-property doc queue.
+    try:
+        import shutil  # noqa: PLC0415
+        from app.routers.uploads import UPLOADS_ROOT  # noqa: PLC0415
+        shutil.rmtree(UPLOADS_ROOT / property_id, ignore_errors=True)
+        q = UPLOADS_ROOT / "_queues" / f"{property_id}.json"
+        if q.exists():
+            q.unlink()
+    except Exception as e:  # noqa: BLE001
+        logger.warning("delete.uploads_failed property=%s err=%s", property_id, e)
+
+    # Finally the property itself. Deleting it changes the reverse-link list on
+    # any surviving landlord, so drop the Landlords cache too (the property's
+    # own delete only invalidates the Properties table).
+    at.delete(at.TableNames.PROPERTIES, property_id)
+    at.invalidate(at.TableNames.LANDLORDS)
+    deleted["property"] = 1
+    logger.info("property.deleted id=%s cascade=%s", property_id, deleted)
+    return {"deleted_property": property_id, "deleted": deleted}
 
 
 @router.get("/{property_id}")

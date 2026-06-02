@@ -661,6 +661,28 @@ existing fields).
 
 ---
 
+## ✅ TPL prepopulation — DONE (2026-06-02, on dev_extended_v2)
+
+Shipped. Expanded [merge_fields.py](backend/app/services/merge_fields.py)
+build_merge_context to **54 keys** sourced from real Properties / Landlords /
+Tenant fields (verified against live schema; **fixed a latent bug** — property
+postcode read `"Post Code"` but the field is `post_code`, so it was always
+blank). Added an **offer-fallback** so offer-stage letters prepopulate from
+the latest offer's tenant before acceptance. Authored **44 TPL bodies**
+(TPL-01..42 + 35a/b/c) as real letters with `{{merge}}` tokens where data maps
+and `[bracketed]` blanks where not, via
+[author_tpls.py](backend/scripts/author_tpls.py) → `templates/library/tpl_*.html`.
+All 44 promote to `library_file`; verified zero unknown tokens, sample renders
+with only intended manual blanks.
+
+**Still pending (the "big contracts", left for last as agreed):** embed merge
+tokens into `pg_tcs_2026` (T&C), `apt_pet_abnb` (APT TA), `common_law_ta`
+(Common Law TA). Also: a few merge values have no Airtable field yet and stay
+manual everywhere — deposit scheme name + cert ref, commission rate, arrears
+amounts, maintenance/works detail, contractor details.
+
+---
+
 _Generated 2026-05-24 while landing Wave A on `dev_extended`. Updated
 2026-06-01 with dashboard Phase 2/3 follow-ups, the Airtable caching plan,
-and the Sent_Documents schema proposal._
+and the Sent_Documents schema proposal; 2026-06-02 with TPL prepopulation._

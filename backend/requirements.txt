@@ -5,7 +5,13 @@ pydantic-settings==2.3.0
 pyairtable==2.3.3
 httpx==0.27.0
 python-jose[cryptography]==3.3.0
+# PyJWT (distinct from python-jose) — used by the DocuSign client for the RS256
+# JWT bearer assertion. Was only in the local venv; declare it explicitly.
+PyJWT==2.8.0
 passlib[bcrypt]==1.7.4
+# passlib 1.7.4 is incompatible with bcrypt >= 4.1 (its backend-detection crashes
+# at startup: "password cannot be longer than 72 bytes"). Pin the last good one.
+bcrypt==4.0.1
 python-multipart==0.0.9
 aiosmtplib==3.0.1
 jinja2==3.1.4

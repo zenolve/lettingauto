@@ -2,7 +2,10 @@ import axios, { AxiosError } from "axios";
 
 import { getToken, signOut } from "./auth";
 
-const baseURL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+// In production the app is served same-origin behind nginx, so API calls use
+// relative paths (/api/…, /auth/…) and nginx proxies them to the backend. In
+// dev they hit the local backend directly. An explicit VITE_API_URL always wins.
+const baseURL = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? "http://localhost:8000" : "");
 
 export const api = axios.create({ baseURL });
 

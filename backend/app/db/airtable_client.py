@@ -219,6 +219,13 @@ def update(name: str, record_id: str, fields: dict) -> dict:
     return res
 
 
+def delete(name: str, record_id: str) -> dict:
+    logger.info("airtable.delete table=%s id=%s", name, record_id)
+    res = with_retry(table(name).delete, record_id)
+    invalidate(name)
+    return res
+
+
 def all_records(name: str, formula: str | None = None, *, fresh: bool = False) -> list[dict]:
     key = ("all", name, formula)
     if CACHE_ENABLED and not fresh:

@@ -1,0 +1,14 @@
+# keep secrets, local state and junk out of the build context / image
+.env
+.env.*
+*.key
+*.pem
+.venv
+__pycache__
+*.pyc
+uploads
+*.pdf
+.pytest_cache
+tests
+Dockerfile
+.dockerignore
