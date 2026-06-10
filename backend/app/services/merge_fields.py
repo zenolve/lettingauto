@@ -15,7 +15,7 @@ from datetime import date
 from typing import Any
 
 from app.config import settings
-from app.db import airtable_client as at
+from app.db import supabase_client as at
 
 # Agent / brand details used across all correspondence. brand_name comes from
 # settings; the rest are editable constants here (move to config if they need

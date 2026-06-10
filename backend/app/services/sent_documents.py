@@ -1,10 +1,10 @@
 """Per-stage sent-document records (``Sent_Documents`` table).
 
-One structured row per document sent for a property — library letters,
+One structured row per document sent for a property â€” library letters,
 prescribed-pack docs, offer / contract sends. Replaces the old habit of
 overloading ``Submissions`` with "Library:" JSON-text rows.
 
-All writers go through ``record_sent`` (best-effort — never raises into the
+All writers go through ``record_sent`` (best-effort â€” never raises into the
 send path). The signing webhook calls ``update_status_by_envelope`` to flip a
 row's status to Signed / Declined when the envelope completes, closing the
 loop that used to be invisible.
@@ -15,7 +15,7 @@ from datetime import date
 from typing import Any, Optional
 
 from app.core.logger import get_logger
-from app.db import airtable_client as at
+from app.db import supabase_client as at
 
 logger = get_logger(__name__)
 
@@ -45,7 +45,7 @@ def record_sent(
     failure rather than breaking the document send."""
     try:
         fields: dict[str, Any] = {
-            "Name": f"{doc_name} · {date.today().isoformat()}",
+            "Name": f"{doc_name} Â· {date.today().isoformat()}",
             "Property": [property_id],
             "Doc ID": doc_id,
             "Doc Name": doc_name,

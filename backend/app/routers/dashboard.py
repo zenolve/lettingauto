@@ -1,7 +1,7 @@
 """Dashboard aggregation (entry-point metrics).
 
 A single ``GET /api/dashboard`` endpoint that rolls up the whole portfolio in
-one pass per table — no per-property fan-out. Powers the agent home page:
+one pass per table â€” no per-property fan-out. Powers the agent home page:
 act-now counts, pipeline distribution, compliance posture, upcoming dates and
 a portfolio summary.
 
@@ -9,7 +9,7 @@ Design notes / best practices:
 - **One read per table.** Properties / Offers / Diary / Tenant are each fetched
   once; everything else is derived in-memory. No N+1 Airtable calls.
 - **Graceful degradation.** A failure reading any secondary table yields an
-  empty section rather than a 500 — the dashboard always renders.
+  empty section rather than a 500 â€” the dashboard always renders.
 - **Pure core.** ``_build_dashboard()`` holds the logic and is import-testable;
   the route is a thin auth wrapper.
 - Stage derivation reuses ``properties._derive_stage_order_from_fields`` so the
@@ -26,7 +26,7 @@ from fastapi import APIRouter, Depends, Query
 
 from app.core.auth import Agent, require_agent
 from app.core.logger import get_logger
-from app.db import airtable_client as at
+from app.db import supabase_client as at
 from app.routers.properties import _STAGE_NAMES, _derive_stage_order_from_fields
 from app.services.derivations import parse_iso_date
 

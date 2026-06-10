@@ -25,22 +25,23 @@ class Settings(BaseSettings):
     agent_bootstrap_email: str = "admin@palacegate.co.uk"
     agent_bootstrap_password: str = "ChangeMeImmediately!"
 
-    # --- Airtable -----------------------------------------------------------
-    airtable_token: str = ""
-    airtable_base_id: str = "appgqHgbJut9LYksm"
+    # --- Supabase (Postgres) --------------------------------------------------
+    # The backend talks straight to Supabase's Postgres. Use the connection
+    # string from Supabase → Settings → Database → Connection string. The
+    # session pooler URI (port 5432) is recommended; any plain Postgres works
+    # too (e.g. the docker-compose.dev.yml `db` service).
+    supabase_db_url: str = ""
+    supabase_pool_max_size: int = 5
+    # Optional — only needed if you later use Supabase Storage / client APIs.
+    supabase_url: str = ""
+    supabase_service_role_key: str = ""
 
-    airtable_table_properties: str = "tblbzHoCEe06wxe24"
-    airtable_table_landlords: str = "tblVIXNIkrRp9Xxh2"
-    airtable_table_tenants: str = "tblTenantTableId"
-    airtable_table_diary: str = "tblE9U8jtmI3DTHbJ"
-    airtable_table_financials: str = "tblj71Zu2Jn260nY0"
-    airtable_table_checklist: str = "tblGiQey64sUuIp2j"
-    airtable_table_submissions: str = "tblaflLP7VFCoPMJo"
-    airtable_table_stages: str = "tblIHHIgbF7WbL4bt"
-    airtable_table_gate_log: str = "tbljoHc7WkcRalZPS"
-    airtable_table_compliance: str = "tblComplianceId"
-    airtable_table_offers: str = "tblJLapFX84NYqAPw"  # created 2026-05-25 (offer lifecycle)
-    airtable_table_sent_documents: str = "tblyG0gijqAN5bo5x"  # created 2026-06-01 (per-stage sent docs)
+    # --- Stripe ----------------------------------------------------------------
+    # Payments (holding deposits / deposits / rent) via Stripe Checkout.
+    # Leave blank to disable — the payments endpoints then return 501.
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_currency: str = "gbp"
 
     # --- SMTP ---------------------------------------------------------------
     smtp_host: str = ""

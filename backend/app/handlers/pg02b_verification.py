@@ -1,4 +1,4 @@
-"""PG_02b — Landlord verification (spec §6.3 / §5.3.1)."""
+"""PG_02b â€” Landlord verification (spec Â§6.3 / Â§5.3.1)."""
 from __future__ import annotations
 
 import json
@@ -7,7 +7,7 @@ from datetime import date
 from app.config import settings
 from app.core.email_client import send_agent_summary
 from app.core.logger import get_logger
-from app.db import airtable_client as at
+from app.db import supabase_client as at
 from app.handlers.pg00_gate import evaluate_gate, find_stage_agent_email
 from app.models.common import LandlordVerificationInput
 from app.services.derivations import is_overseas, next_april_5
@@ -81,7 +81,7 @@ async def handle_verification(
         "Source of Funds": payload.source_of_funds,
         "Purchase Explanation": payload.purchase_explanation,
         # Verification Status singleSelect in Airtable only has Pending Review
-        # / Approved / Rejected — the EDD distinction is carried on the
+        # / Approved / Rejected â€” the EDD distinction is carried on the
         # Gate_Log warning + the agent summary email instead.
         "Verification Status": "Pending Review",
         "ID_Name_Match": "Pending",
@@ -90,7 +90,7 @@ async def handle_verification(
     fields = {k: v for k, v in fields.items() if v is not None}
     at.update(at.TableNames.LANDLORDS, landlord_id, fields)
 
-    # 2. Overseas → NRL diary (once) — Diary table has no Landlord link, so
+    # 2. Overseas â†’ NRL diary (once) â€” Diary table has no Landlord link, so
     #    landlord context is embedded in Alert_Message.
     if isOverseas and not landlord.get("fields", {}).get("NRL_Tax_Cert_Diary_Set"):
         ll_name = landlord.get("fields", {}).get("Full Name", "landlord")
@@ -118,7 +118,7 @@ async def handle_verification(
     template = "E04_EDD_verification.html" if edd else "E04_verification_received.html"
     await send_agent_summary(
         agent_email or "",
-        subject=f"Verification received — {payload.individual_or_company} path",
+        subject=f"Verification received â€” {payload.individual_or_company} path",
         template=template,
         context={
             "landlord_id": landlord_id,
@@ -132,14 +132,14 @@ async def handle_verification(
         },
     )
 
-    # 5. Gate check — re-evaluate stage 3 conditions so any blockers (e.g.
+    # 5. Gate check â€” re-evaluate stage 3 conditions so any blockers (e.g.
     #    T&C not yet signed) are surfaced to the agent now that verification
     #    is complete. Also surface missing AML-pack pieces as warnings so the
     #    agent can chase before approving the landlord.
     review_actions: list[str] = ["Review AML pack and confirm ID name match."]
     review_warnings: list[str] = []
     if edd:
-        review_warnings.append("Enhanced Due Diligence required — high-risk source of funds.")
+        review_warnings.append("Enhanced Due Diligence required â€” high-risk source of funds.")
     if not payload.id_document_upload:
         review_warnings.append("ID document not uploaded.")
     if not payload.address_doc_upload:
@@ -147,16 +147,16 @@ async def handle_verification(
     if not payload.ownership_doc_upload:
         review_warnings.append("Proof of ownership not uploaded.")
     if isOverseas and not payload.visa_snapshot:
-        review_warnings.append("Overseas landlord — visa / BRP snapshot not uploaded.")
+        review_warnings.append("Overseas landlord â€” visa / BRP snapshot not uploaded.")
     if isCompany:
         if not (payload.director_name or "").strip():
-            review_warnings.append("Company landlord — director name missing.")
+            review_warnings.append("Company landlord â€” director name missing.")
         if not payload.certificate_of_incorporation:
-            review_warnings.append("Company landlord — certificate of incorporation not uploaded.")
+            review_warnings.append("Company landlord â€” certificate of incorporation not uploaded.")
         if not payload.bank_statements_upload:
-            review_warnings.append("Company landlord — bank statements not uploaded.")
+            review_warnings.append("Company landlord â€” bank statements not uploaded.")
         if not (payload.company_reg_number or "").strip():
-            review_warnings.append("Company landlord — company registration number missing.")
+            review_warnings.append("Company landlord â€” company registration number missing.")
     gate = await evaluate_gate(
         property_id, target_stage=3,
         warnings=review_warnings,

@@ -1,4 +1,4 @@
-"""File uploads — per-property document storage.
+"""File uploads â€” per-property document storage.
 
 Replaces the legacy "url" fields on landlord admin / verification forms (which
 used to point at Tally's storage). Files now live on the backend filesystem
@@ -65,13 +65,18 @@ ALLOWED_BUCKETS = {
     "other",
 }
 
-_PROPERTY_ID_RE = re.compile(r"^rec[a-zA-Z0-9]{14}$")
+# Supabase rows use UUID ids; legacy Airtable "rec..." ids are still accepted
+# so pre-migration upload folders stay reachable.
+_PROPERTY_ID_RE = re.compile(
+    r"^(rec[a-zA-Z0-9]{14}"
+    r"|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$"
+)
 _UNSAFE_CHARS = re.compile(r"[^A-Za-z0-9._-]")
 
 
 def _check_property_id(property_id: str) -> None:
     if not _PROPERTY_ID_RE.match(property_id):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "property_id must be an Airtable record id")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "property_id must be a record id (uuid)")
 
 
 def _check_bucket(bucket: str) -> None:
@@ -225,12 +230,12 @@ def list_property_uploads(
 
 
 # ---------------------------------------------------------------------------
-# Bucket → Airtable URL-field mapping. When a file is uploaded to / replaced
+# Bucket â†’ Airtable URL-field mapping. When a file is uploaded to / replaced
 # in / deleted from one of these buckets, the agent-facing uploads manager
 # syncs the matching record's URL field automatically.
 #
-#   target = "properties"  → field on the Properties record
-#   target = "landlord"    → field on the FIRST linked Landlord (primary)
+#   target = "properties"  â†’ field on the Properties record
+#   target = "landlord"    â†’ field on the FIRST linked Landlord (primary)
 #
 # Buckets not listed here are file-only (the file is still served, but no
 # Airtable column tracks it).
@@ -255,7 +260,7 @@ def _sync_bucket_url_to_airtable(property_id: str, bucket: str, url: str | None)
     Returns a small `{table, field, record_id}` audit object on success, or
     `None` if the bucket has no Airtable mapping.
     """
-    from app.db import airtable_client as at  # noqa: PLC0415
+    from app.db import supabase_client as at  # noqa: PLC0415
 
     mapping = BUCKET_FIELD_MAP.get(bucket)
     if not mapping:

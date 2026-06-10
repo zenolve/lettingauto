@@ -1,4 +1,4 @@
-"""PG_03 — Offer handler (spec §6.4).
+"""PG_03 â€” Offer handler (spec Â§6.4).
 
 Creates a Tenant record, applies APT validation, sets HMO flag, generates the
 DocuSeal Offer Letter, and emails the agent.
@@ -13,7 +13,7 @@ from app.core.docuseal_client import create_template_submission
 from app.core.email_client import send_agent_summary
 from app.core.logger import get_logger
 from app.core.paragon_client import instruct_paragon
-from app.db import airtable_client as at
+from app.db import supabase_client as at
 from app.handlers.pg00_gate import evaluate_gate, find_stage_agent_email
 from app.models.common import OfferInput
 from app.services.apt import validate_apt, weekly_rent_from_monthly
@@ -44,7 +44,7 @@ async def handle_offer(property_id: str, payload: OfferInput) -> dict:
             "Gate Block Reason": "; ".join(violations),
         })
         # Write a Gate_Log row so the property page's ReviewPanel surfaces
-        # the APT violations to the agent — without this the early-return
+        # the APT violations to the agent â€” without this the early-return
         # path was silent on the dashboard.
         try:
             from app.handlers.pg00_gate import _log_gate  # noqa: PLC0415
@@ -62,7 +62,7 @@ async def handle_offer(property_id: str, payload: OfferInput) -> dict:
         agent_email = find_stage_agent_email(4)
         await send_agent_summary(
             agent_email or "",
-            subject=f"APT violation on offer — {pfields.get('Address')}",
+            subject=f"APT violation on offer â€” {pfields.get('Address')}",
             template="E06_apt_violation.html",
             context={
                 "property_address": pfields.get("Address"),
@@ -72,7 +72,7 @@ async def handle_offer(property_id: str, payload: OfferInput) -> dict:
         )
         return {"violations": violations, "blocked": True}
 
-    # 2. Create tenant — includes Right to Rent fields (steps 35–38, 46).
+    # 2. Create tenant â€” includes Right to Rent fields (steps 35â€“38, 46).
     tenant_fields = {
         "Name": payload.tenant_full_name,
         "Tenant Email": payload.tenant_email,
@@ -128,7 +128,7 @@ async def handle_offer(property_id: str, payload: OfferInput) -> dict:
         except Exception as e:  # noqa: BLE001
             logger.warning("rtr.compliance_create_failed err=%s", e)
 
-    # 2c. Visa expiry → diary follow-up (step 102).
+    # 2c. Visa expiry â†’ diary follow-up (step 102).
     if payload.visa_expiry_date:
         try:
             from datetime import timedelta  # noqa: PLC0415
@@ -165,7 +165,7 @@ async def handle_offer(property_id: str, payload: OfferInput) -> dict:
         except Exception as e:  # noqa: BLE001
             logger.warning("paragon.instruct_failed err=%s", e)
 
-    # 2e. Co-tenants — create one Tenant record per additional occupant.
+    # 2e. Co-tenants â€” create one Tenant record per additional occupant.
     co_tenant_ids: list[str] = []
     for ct in payload.co_tenants:
         ct_fields = {
@@ -212,11 +212,11 @@ async def handle_offer(property_id: str, payload: OfferInput) -> dict:
         property_update["Anti_Discrimination_Confirmed_Date"] = date.today().isoformat()
     at.update(at.TableNames.PROPERTIES, property_id, property_update)
 
-    # 3b. Offer-chase diary (Gap 2) — the landlord may neither sign nor decline
+    # 3b. Offer-chase diary (Gap 2) â€” the landlord may neither sign nor decline
     #     the offer letter. Nothing else reads Holding_Deposit_Deadline, so the
     #     statutory 15-day holding-deposit clock can quietly run out. Schedule a
     #     chase 7 days out; PG_06 fires it to the stage agent. Uses the existing
-    #     "Reminder" Diary_Type (singleSelect has no "Offer Chase" option — a
+    #     "Reminder" Diary_Type (singleSelect has no "Offer Chase" option â€” a
     #     dedicated type would be a one-option schema add later).
     try:
         from datetime import timedelta  # noqa: PLC0415
@@ -228,7 +228,7 @@ async def handle_offer(property_id: str, payload: OfferInput) -> dict:
             "Diary Date": date.today().isoformat(),
             "Alert_Date": chase_date,
             "Alert_Message": (
-                f"Offer chase — landlord has not yet signed the offer letter for "
+                f"Offer chase â€” landlord has not yet signed the offer letter for "
                 f"{pfields.get('Address', '')}. Holding-deposit deadline {deadline}. "
                 f"Chase or refund before the 15-day limit."
             ),
@@ -270,8 +270,8 @@ async def handle_offer(property_id: str, payload: OfferInput) -> dict:
                 prefill_fields={
                     "property_address": pfields.get("Address", ""),
                     "tenant_full_name": payload.tenant_full_name,
-                    "monthly_rent": f"£{payload.monthly_rent:,.2f}",
-                    "deposit_amount": f"£{payload.deposit_amount:,.2f}",
+                    "monthly_rent": f"Â£{payload.monthly_rent:,.2f}",
+                    "deposit_amount": f"Â£{payload.deposit_amount:,.2f}",
                     "start_date": payload.start_date.isoformat(),
                     "end_date": payload.end_date.isoformat() if payload.end_date else "Periodic",
                     "tenancy_term": payload.tenancy_term or "Periodic",
@@ -288,12 +288,12 @@ async def handle_offer(property_id: str, payload: OfferInput) -> dict:
     # 4b. Create the Offer row (Gap 5). Snapshots the commercial terms + the
     #     offer-letter envelope/submission id so the lifecycle (accept / reject
     #     / withdraw, competing offers) is tracked independently of
-    #     Properties.Tenant. The landlord signing the offer letter (PG_04) — or
-    #     the agent via /api/offers/{id}/accept — flips this Pending offer to
+    #     Properties.Tenant. The landlord signing the offer letter (PG_04) â€” or
+    #     the agent via /api/offers/{id}/accept â€” flips this Pending offer to
     #     Accepted and only then links the tenants to the property.
     offer_id: str | None = None
     try:
-        from app.services.offers import create_offer  # noqa: PLC0415 — avoid load cycle
+        from app.services.offers import create_offer  # noqa: PLC0415 â€” avoid load cycle
         envelope_id = (docuseal_response or {}).get("id")
         offer_id = create_offer(
             property_id=property_id,
@@ -345,7 +345,7 @@ async def handle_offer(property_id: str, payload: OfferInput) -> dict:
     agent_email = find_stage_agent_email(4)
     await send_agent_summary(
         agent_email or "",
-        subject=f"Offer received — {payload.tenant_full_name} — {pfields.get('Address')}",
+        subject=f"Offer received â€” {payload.tenant_full_name} â€” {pfields.get('Address')}",
         template="E05_offer_received.html",
         context={
             "property_address": pfields.get("Address"),
@@ -357,7 +357,7 @@ async def handle_offer(property_id: str, payload: OfferInput) -> dict:
         },
     )
 
-    # 7. Gate check — PG_00 evaluates stage 5 (offer accepted) conditions.
+    # 7. Gate check â€” PG_00 evaluates stage 5 (offer accepted) conditions.
     #    Expected to block initially because LL_Offer_Accepted only flips when
     #    DocuSeal callback in PG_04 confirms the landlord signed the offer
     #    letter; the block_reason surfaces that to the agent.
@@ -369,10 +369,10 @@ async def handle_offer(property_id: str, payload: OfferInput) -> dict:
         )
         offer_actions.append("Confirm HMO licence (auto-added to checklist).")
     if not payload.anti_discrimination_confirmed and tenancy_type == "APT":
-        offer_warnings.append("Anti-discrimination confirmation not ticked — APT compliance requires this before stage 5.")
+        offer_warnings.append("Anti-discrimination confirmation not ticked â€” APT compliance requires this before stage 5.")
     if payload.is_student or any(ct.is_student for ct in payload.co_tenants):
         offer_actions.append(
-            "Student tenancy — Ground 4A notice required by 31 May 2026 (RRA 2025 Schedule 2)."
+            "Student tenancy â€” Ground 4A notice required by 31 May 2026 (RRA 2025 Schedule 2)."
         )
     gate = await evaluate_gate(
         property_id, target_stage=5,

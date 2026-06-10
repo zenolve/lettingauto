@@ -1,4 +1,4 @@
-"""PG_02 — Landlord admin form (spec §6.2)."""
+"""PG_02 â€” Landlord admin form (spec Â§6.2)."""
 from __future__ import annotations
 
 import json
@@ -8,7 +8,7 @@ from app.config import settings
 from app.core.auth import FormTokenPayload, create_form_token
 from app.core.email_client import send_agent_summary, send_verification_link
 from app.core.logger import get_logger
-from app.db import airtable_client as at
+from app.db import supabase_client as at
 from app.handlers.pg00_gate import evaluate_gate, find_stage_agent_email, find_stage_by_order
 from app.models.common import LandlordAdminInput
 from app.services.compliance import run_checks
@@ -37,7 +37,7 @@ async def handle_admin(property_id: str, payload: LandlordAdminInput) -> dict:
     nrl_active = nrl_withholding_active(payload.residency, payload.nrl_approval_number)
 
     # 2. Update Properties record. Only the columns that exist in the live
-    #    Airtable schema are written here — the rest of the Tally-parity
+    #    Airtable schema are written here â€” the rest of the Tally-parity
     #    payload is preserved verbatim in the SUBMISSIONS audit row (step 3).
     property_fields: dict = {
         "Service Level": service_level,
@@ -135,7 +135,7 @@ async def handle_admin(property_id: str, payload: LandlordAdminInput) -> dict:
         "account_number": payload.account_number,
     })
 
-    # 6. NRL diary (only once) — live Airtable's Diary table has no Landlord
+    # 6. NRL diary (only once) â€” live Airtable's Diary table has no Landlord
     #    link field, so the landlord context goes into Alert_Message instead.
     if isNRL:
         landlord = at.get(at.TableNames.LANDLORDS, landlord_id)
@@ -151,13 +151,13 @@ async def handle_admin(property_id: str, payload: LandlordAdminInput) -> dict:
             })
             at.update(at.TableNames.LANDLORDS, landlord_id, {"NRL_Tax_Cert_Diary_Set": True})
 
-    # 7. Notify agent — include the full submitted payload so the agent can
+    # 7. Notify agent â€” include the full submitted payload so the agent can
     #    review every field directly in their inbox.
     agent_email = find_stage_agent_email(2)
     submission_fields = _payload_review_rows(payload)
     await send_agent_summary(
         agent_email or "",
-        subject=f"Landlord admin received — {payload.landlord_full_name} — {property_address}",
+        subject=f"Landlord admin received â€” {payload.landlord_full_name} â€” {property_address}",
         template="E02_admin_received.html",
         context={
             "property_address": property_address,
@@ -189,7 +189,7 @@ async def handle_admin(property_id: str, payload: LandlordAdminInput) -> dict:
         form_url=form_url,
     )
 
-    # 9. Gate check — PG_00 is the exit condition for stage 2. Logs any
+    # 9. Gate check â€” PG_00 is the exit condition for stage 2. Logs any
     #    blockers (e.g. T&C not yet signed) to the agent.
     #    The compliance report's non-blocking warnings/actions ride along on
     #    the same Gate_Log row so the property page can surface them.

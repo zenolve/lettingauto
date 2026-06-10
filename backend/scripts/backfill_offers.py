@@ -3,7 +3,7 @@ linked tenant (pre-Gap-5 data).
 
 After the Gap 5 rewrite, ``Properties.Tenant`` is only set when an offer is
 accepted, and the lifecycle lives in the ``Offers`` table. Properties created
-under the old model have a tenant link but no Offer row — this script creates
+under the old model have a tenant link but no Offer row â€” this script creates
 one ``Status=Accepted`` offer per such property so the data is consistent and
 the new Stage-4 offers UI shows them.
 
@@ -19,7 +19,7 @@ from __future__ import annotations
 import sys
 from datetime import date
 
-from app.db import airtable_client as at
+from app.db import supabase_client as at
 
 
 def _first(v):
@@ -50,7 +50,7 @@ def main(apply: bool) -> None:
                 pass
 
         fields = {
-            "Name": f"Offer · {tf.get('Name', 'tenant')} · {pf.get('Address', '')}".strip(" ·"),
+            "Name": f"Offer Â· {tf.get('Name', 'tenant')} Â· {pf.get('Address', '')}".strip(" Â·"),
             "Property": [pid],
             "Tenants": tenant_ids,
             "Status": "Accepted",
@@ -80,7 +80,7 @@ def main(apply: bool) -> None:
     verb = "created" if apply else "would create"
     print(f"\n{verb} {created} offer(s); skipped {skipped} property(ies) that already have offers.")
     if not apply:
-        print("Dry run — re-run with --apply to write.")
+        print("Dry run â€” re-run with --apply to write.")
 
 
 if __name__ == "__main__":

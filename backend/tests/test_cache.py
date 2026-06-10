@@ -1,5 +1,5 @@
-"""Unit tests for the in-memory Airtable read cache (_TTLCache)."""
-from app.db.airtable_client import _MISS, _TTLCache
+"""Unit tests for the in-memory read cache (_TTLCache)."""
+from app.db.supabase_client import _MISS, _TTLCache
 
 
 def test_set_and_get():

@@ -1,4 +1,4 @@
-"""PG_00 — Gate evaluator (spec §3.1).
+"""PG_00 â€” Gate evaluator (spec Â§3.1).
 
 Not an HTTP endpoint: a reusable function called by other handlers after their
 work is complete. Evaluates the conditions for the *next* stage and either
@@ -12,7 +12,7 @@ from typing import Callable
 
 from app.core.email_client import send_agent_summary
 from app.core.logger import get_logger
-from app.db import airtable_client as at
+from app.db import supabase_client as at
 from app.services.derivations import parse_iso_date
 
 logger = get_logger(__name__)
@@ -32,7 +32,7 @@ def find_stage_agent_email(order: int) -> str | None:
     val = stage.get("fields", {}).get("Stage agent")
     if not val:
         return None
-    # Live Airtable has "Stage agent" as multipleCollaborators → list of
+    # Live Airtable has "Stage agent" as multipleCollaborators â†’ list of
     # {id, email, name} dicts. Tolerate plain string too in case the schema
     # is ever changed back to an email field.
     if isinstance(val, list):
@@ -103,7 +103,7 @@ def _has_linked(field: dict, key: str) -> str:
 def _all_tenants_have(field: dict, key: str) -> str:
     """Pass when every linked Tenant on this property has ``key`` truthy.
 
-    Used for Stage 5→6: Referencing_Recorded and Landlord_Approval_Received
+    Used for Stage 5â†’6: Referencing_Recorded and Landlord_Approval_Received
     are per-tenant checkboxes on the Tenants table (not Properties).
     """
     tenant_ids = field.get("Tenant") or []
@@ -125,10 +125,10 @@ def _all_tenants_have(field: dict, key: str) -> str:
 
 # Map of stage transitions to a list of (label, fn) pairs.
 TRANSITIONS: dict[int, list[tuple[str, Condition]]] = {
-    2: [  # 1 → 2: take-on complete
+    2: [  # 1 â†’ 2: take-on complete
         ("Landlord linked", lambda f: _has_linked(f, "Landlords")),
     ],
-    3: [  # 2 → 3: compliance complete
+    3: [  # 2 â†’ 3: compliance complete
         ("Gas cert status", lambda f: _cert_status_acceptable(f, "Gas_Cert_Status")),
         ("EPC status", lambda f: _cert_status_acceptable(f, "EPC_Status")),
         ("EICR status", lambda f: _cert_status_acceptable(f, "EICR_Status")),
@@ -139,32 +139,32 @@ TRANSITIONS: dict[int, list[tuple[str, Condition]]] = {
          lambda f: _date_not_expired(f, "EICR Expiry") if f.get("EICR_Status") == "On File" else _ok()),
         ("T&C signed", lambda f: _bool_true(f, "TC_Signed")),
     ],
-    4: [  # 3 → 4: marketing complete
+    4: [  # 3 â†’ 4: marketing complete
         ("T&C signed", lambda f: _bool_true(f, "TC_Signed")),
     ],
-    5: [  # 4 → 5: offer accepted
+    5: [  # 4 â†’ 5: offer accepted
         ("Landlord offer accepted", lambda f: _bool_true(f, "LL_Offer_Accepted")),
         ("Anti-discrimination confirmed (APT only)",
          lambda f: _bool_true(f, "Anti_Discrimination_Confirmed") if f.get("Tenancy Type") == "APT" else _ok()),
         ("HMO licence confirmed",
          lambda f: _bool_true(f, "HMO_Licence_Confirmed") if f.get("HMO_Flag") else _ok()),
     ],
-    6: [  # 5 → 6: referencing complete.
+    6: [  # 5 â†’ 6: referencing complete.
         # Per-tenant: every named tenant has a recorded referencing outcome.
         ("Referencing outcome recorded", lambda f: _all_tenants_have(f, "Referencing_Recorded")),
         # Property-level: landlord has accepted the offer (= LL_Offer_Accepted).
         # We deliberately re-use the existing checkbox rather than introducing
-        # a duplicate Landlord_Approval_Received field — they mean the same
+        # a duplicate Landlord_Approval_Received field â€” they mean the same
         # thing operationally (the landlord has approved the tenancy).
         ("Landlord approval received",   lambda f: _bool_true(f, "LL_Offer_Accepted")),
     ],
-    7: [  # 6 → 7: TA signed
+    7: [  # 6 â†’ 7: TA signed
         ("TA signed by landlord", lambda f: _bool_true(f, "TA_LL_Signed")),
         ("TA signed by tenant", lambda f: _bool_true(f, "TA_TT_Signed")),
         ("TDS cert on file", lambda f: _bool_true(f, "TDS Cert On File")),
         ("Deposit registered", lambda f: _bool_true(f, "Deposit Registered")),
     ],
-    8: [  # 7 → 8: pre move-in complete
+    8: [  # 7 â†’ 8: pre move-in complete
         ("Funds cleared", lambda f: _bool_true(f, "funds_cleared")),
         ("How To Rent served", lambda f: _bool_true(f, "How_To_Rent_Served")),
         ("Gas cert served", lambda f: _bool_true(f, "Gas_Cert_Served")),
@@ -235,7 +235,7 @@ async def evaluate_gate(
             agent_email = find_stage_agent_email(target_stage)
             await send_agent_summary(
                 agent_email or "",
-                subject=f"Gate blocked — Stage {target_stage} — {fields.get('Address', '')}",
+                subject=f"Gate blocked â€” Stage {target_stage} â€” {fields.get('Address', '')}",
                 template="E12_gate_blocked.html",
                 context={
                     "property_address": fields.get("Address"),
@@ -248,7 +248,7 @@ async def evaluate_gate(
                     property_id, target_stage, failures, silent)
         return GateResult(advanced=False, target_stage=target_stage, failures=failures)
 
-    # Success — advance
+    # Success â€” advance
     update_fields = {
         "Gate Status": "Clear",
         "Gate Block Reason": "",
@@ -265,7 +265,7 @@ async def evaluate_gate(
         agent_email = find_stage_agent_email(target_stage)
         await send_agent_summary(
             agent_email or "",
-            subject=f"Stage {target_stage} reached — {fields.get('Address', '')}",
+            subject=f"Stage {target_stage} reached â€” {fields.get('Address', '')}",
             template="E13_stage_advanced.html",
             context={
                 "property_address": fields.get("Address"),
@@ -292,7 +292,7 @@ async def _log_gate(
     Field names match the live Airtable schema (Result singleSelect:
     Passed/Blocked; Attempted_At dateTime; From_Stage/To_Stage as strings).
 
-    Non-blocking compliance findings — `warnings`, `actions`, `source` —
+    Non-blocking compliance findings â€” `warnings`, `actions`, `source` â€”
     are written to the Gate Warnings / Gate Actions / Gate Warnings Source
     columns when supplied so the agent UI can render them on the property
     page. ``Gate Warnings Updated`` carries today's date so dismissals from

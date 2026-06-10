@@ -1,4 +1,4 @@
-"""PG_04 — DocuSeal webhook handler (spec §6.5)."""
+"""PG_04 â€” DocuSeal webhook handler (spec Â§6.5)."""
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
@@ -6,7 +6,7 @@ from typing import Any
 
 from app.core.email_client import send_agent_summary
 from app.core.logger import get_logger
-from app.db import airtable_client as at
+from app.db import supabase_client as at
 from app.handlers.pg00_gate import evaluate_gate, find_stage_agent_email
 from app.services.derivations import parse_iso_date
 
@@ -17,7 +17,7 @@ def _doc_kind(template_name: str, library_doc_id: str | None = None) -> str:
     """Map a DocuSeal template name (or library doc id) to a logical document kind.
 
     DocuSign Connect can omit ``emailSubject`` from the webhook payload if the
-    Connect configuration doesn't tick "Include Envelope Data" — in that case
+    Connect configuration doesn't tick "Include Envelope Data" â€” in that case
     the normaliser falls back to the library doc id (e.g. ``pg_tcs_2026``).
     We classify off that too so the gate routing still works.
     """
@@ -82,7 +82,7 @@ async def handle_docuseal_event(payload: dict[str, Any]) -> dict:
             pass
         decline_warning = f"{template_name} was declined by signer."
         try:
-            from app.handlers.pg00_gate import _log_gate  # local import — avoid load-time cycle
+            from app.handlers.pg00_gate import _log_gate  # local import â€” avoid load-time cycle
             await _log_gate(
                 property_id,
                 int(pfields.get("Stage_Order", 4) or 4),
@@ -110,7 +110,7 @@ async def handle_docuseal_event(payload: dict[str, Any]) -> dict:
                 logger.warning("docuseal.offer_decline_close_failed err=%s", e)
         await send_agent_summary(
             find_stage_agent_email(pfields.get("Stage_Order", 4)) or "",
-            subject=f"Document DECLINED — {template_name}",
+            subject=f"Document DECLINED â€” {template_name}",
             template="E08_document_declined.html",
             context={
                 "property_address": pfields.get("Address"),
@@ -152,7 +152,7 @@ async def handle_docuseal_event(payload: dict[str, Any]) -> dict:
                 res = await accept_offer(offer["id"], source="docusign")
                 await send_agent_summary(
                     find_stage_agent_email(4) or "",
-                    subject=f"Offer accepted — {template_name}",
+                    subject=f"Offer accepted â€” {template_name}",
                     template="E07_document_signed.html",
                     context={
                         "property_address": pfields.get("Address"),
@@ -162,7 +162,7 @@ async def handle_docuseal_event(payload: dict[str, Any]) -> dict:
                 return {"property_id": property_id, "kind": kind,
                         "offer_accepted": offer["id"], "gate": res.get("gate")}
         except Exception as e:  # noqa: BLE001
-            logger.warning("docuseal.offer_accept_failed err=%s — falling back", e)
+            logger.warning("docuseal.offer_accept_failed err=%s â€” falling back", e)
         # fall through to legacy flag-set below if no offer row / on error
 
     update: dict[str, Any] = {}
@@ -191,14 +191,14 @@ async def handle_docuseal_event(payload: dict[str, Any]) -> dict:
             tt = at.find_first(at.TableNames.TENANTS, at.eq("Tenant Email", email))
             if tt:
                 # Per-tenant signature. On a joint tenancy EVERY named tenant
-                # must sign before the tenant side of the TA is complete — a
+                # must sign before the tenant side of the TA is complete â€” a
                 # single signer no longer advances the property.
                 try:
                     at.update(at.TableNames.TENANTS, tt["id"], {"TA_Signed": True})
                 except Exception as e:  # noqa: BLE001
                     logger.warning("ta.tenant_sign_mark_failed id=%s err=%s", tt["id"], e)
         # Roll up to the property: TA_TT_Signed becomes True only once *all*
-        # linked tenants have TA_Signed. (Manual override still works — the
+        # linked tenants have TA_Signed. (Manual override still works â€” the
         # PropertyFlags toggle sets TA_TT_Signed directly.)
         tenant_ids = pfields.get("Tenant") or []
         if tenant_ids:
@@ -247,7 +247,7 @@ async def handle_docuseal_event(payload: dict[str, Any]) -> dict:
     target = 3 if kind == "TC" else (5 if kind == "OFFER" else 7)
     gate = await evaluate_gate(
         property_id, target_stage=target,
-        actions=[f"{template_name} signed — review any post-signing tasks."],
+        actions=[f"{template_name} signed â€” review any post-signing tasks."],
         source=f"PG_04 DocuSeal ({kind})",
     )
 
@@ -269,9 +269,9 @@ def _create_ta_diary_entries(property_id: str, fields: dict) -> None:
     """Schedule the standard post-TA-signed diary entries.
 
     For APT (Renters' Rights Act 2025): Section 13 / Form 4A rent-review notice
-    must be served 2.5 months before the 12-month anniversary — i.e. at
+    must be served 2.5 months before the 12-month anniversary â€” i.e. at
     month 9.5. Missing this means no rent increase is possible and Palace Gate
-    could be liable to the landlord (per master doc CRITICAL DEADLINES §53/§96).
+    could be liable to the landlord (per master doc CRITICAL DEADLINES Â§53/Â§96).
     """
     today = date.today()
     start = parse_iso_date(fields.get("Tenancy Start Date"))
@@ -282,14 +282,14 @@ def _create_ta_diary_entries(property_id: str, fields: dict) -> None:
     address = fields.get("Address", "")
 
     if start:
-        # Step 53 / 96 — high-priority Section 13 rent-review alert at month 9.5.
+        # Step 53 / 96 â€” high-priority Section 13 rent-review alert at month 9.5.
         alert_date = start + timedelta(days=int(9.5 * 30))
         at.create(at.TableNames.DIARY, {
             "Diary_Type": "Rent Review S13",
             "Property": [property_id],
             "Diary Date": today.isoformat(),
             "Alert_Date": alert_date.isoformat(),
-            "Alert_Message": f"Section 13 / Form 4A due (month 9.5) — {address}",
+            "Alert_Message": f"Section 13 / Form 4A due (month 9.5) â€” {address}",
             "Fired": False,
         })
     if gas_exp:
@@ -298,7 +298,7 @@ def _create_ta_diary_entries(property_id: str, fields: dict) -> None:
             "Property": [property_id],
             "Diary Date": today.isoformat(),
             "Alert_Date": (gas_exp - timedelta(days=60)).isoformat(),
-            "Alert_Message": f"Gas Safety Certificate renewal due — {address}",
+            "Alert_Message": f"Gas Safety Certificate renewal due â€” {address}",
             "Fired": False,
         })
     if eicr_exp:
@@ -307,7 +307,7 @@ def _create_ta_diary_entries(property_id: str, fields: dict) -> None:
             "Property": [property_id],
             "Diary Date": today.isoformat(),
             "Alert_Date": (eicr_exp - timedelta(days=60)).isoformat(),
-            "Alert_Message": f"EICR renewal due — {address}",
+            "Alert_Message": f"EICR renewal due â€” {address}",
             "Fired": False,
         })
     if is_apt and start:
@@ -316,7 +316,7 @@ def _create_ta_diary_entries(property_id: str, fields: dict) -> None:
             "Property": [property_id],
             "Diary Date": today.isoformat(),
             "Alert_Date": (start + timedelta(days=30)).isoformat(),
-            "Alert_Message": f"Register deposit with TDS (30-day deadline) — {address}",
+            "Alert_Message": f"Register deposit with TDS (30-day deadline) â€” {address}",
             "Fired": False,
         })
     if not is_apt and expiry:
@@ -325,6 +325,6 @@ def _create_ta_diary_entries(property_id: str, fields: dict) -> None:
             "Property": [property_id],
             "Diary Date": today.isoformat(),
             "Alert_Date": (expiry - timedelta(days=60)).isoformat(),
-            "Alert_Message": f"Tenancy expiry in 60 days — begin renewal discussions — {address}",
+            "Alert_Message": f"Tenancy expiry in 60 days â€” begin renewal discussions â€” {address}",
             "Fired": False,
         })

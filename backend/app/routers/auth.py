@@ -12,7 +12,7 @@ from app.core.auth import (
     require_agent,
     verify_password,
 )
-from app.db import airtable_client as at
+from app.db import supabase_client as at
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 

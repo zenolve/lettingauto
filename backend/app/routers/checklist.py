@@ -1,4 +1,4 @@
-"""Tenancy checklist — Stage 7 (Pre Move-in) widget backing.
+"""Tenancy checklist â€” Stage 7 (Pre Move-in) widget backing.
 
 Two surfaces:
 
@@ -7,14 +7,14 @@ Two surfaces:
   caches it in localStorage and exposes a refresh button rather than
   re-fetching on every page load.
 
-* ``GET  /api/properties/{id}/checklist``        — items currently ticked
-* ``POST /api/properties/{id}/checklist/{item}`` — tick (link the item)
-* ``DELETE /api/properties/{id}/checklist/{item}`` — untick (unlink)
+* ``GET  /api/properties/{id}/checklist``        â€” items currently ticked
+* ``POST /api/properties/{id}/checklist/{item}`` â€” tick (link the item)
+* ``DELETE /api/properties/{id}/checklist/{item}`` â€” untick (unlink)
 
 Ticking writes the catalog row id into ``Properties.Checklist`` (the
-multipleRecordLinks field — distinct from ``Properties.Tenancy Checklist``,
+multipleRecordLinks field â€” distinct from ``Properties.Tenancy Checklist``,
 which is unused). Unticking removes it. We never duplicate catalog rows per
-property — properties just reference the shared catalog items by link.
+property â€” properties just reference the shared catalog items by link.
 
 (Airtable maintains the reverse link automatically: a tick also makes the
 catalog row's ``Properties`` field show this property. The other reverse
@@ -23,7 +23,7 @@ field ``Tenancy Checklist.Property`` stays empty because we don't write to
 
 (Future: filter the catalog by ``applies_to`` matching the property's
 Tenancy Type / Service Level / Property Type, and pre-populate the
-property's checklist on creation. Today neither is wired — see the agent's
+property's checklist on creation. Today neither is wired â€” see the agent's
 brief on 2026-05-16.)
 """
 from __future__ import annotations
@@ -34,20 +34,20 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.auth import Agent, require_agent
 from app.core.logger import get_logger
-from app.db import airtable_client as at
+from app.db import supabase_client as at
 
 router = APIRouter(tags=["checklist"])
 logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Catalog — every row in the Tenancy Checklist table.
+# Catalog â€” every row in the Tenancy Checklist table.
 # ---------------------------------------------------------------------------
 @router.get("/api/checklist/catalog")
 def checklist_catalog(_: Agent = Depends(require_agent)) -> dict:
     """Return every checklist item the agent can pick from.
 
-    Sorted by Priority (Critical → Low) then Name so the most-important items
+    Sorted by Priority (Critical â†’ Low) then Name so the most-important items
     surface first when the agent expands the panel.
     """
     try:

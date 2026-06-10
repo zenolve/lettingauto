@@ -4,7 +4,7 @@ Endpoints:
   GET  /api/contracts/templates                          List bundled templates
   GET  /api/contracts/{property_id}/prepare/{template}   Get prefilled HTML + merge fields
   POST /api/contracts/{property_id}/submit               Body has edited HTML + signing roles.
-                                                          We HTML→PDF→DocuSeal.
+                                                          We HTMLâ†’PDFâ†’DocuSeal.
 """
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from app.core.auth import Agent, require_agent
 from app.core.docuseal_client import create_pdf_submission
 from app.core.logger import get_logger
 from app.core.pdf_renderer import html_to_pdf, render_contract_html, render_template_to_html
-from app.db import airtable_client as at
+from app.db import supabase_client as at
 from app.services.merge_fields import MERGE_FIELD_CATALOGUE, build_merge_context
 
 router = APIRouter(prefix="/api/contracts", tags=["contracts"])
@@ -97,7 +97,7 @@ async def submit_contract(
     if body.template_key not in TEMPLATES:
         raise HTTPException(400, f"Unknown template: {body.template_key}")
 
-    # 1. Final interpolation pass — replace any remaining {{merge_field}} tokens
+    # 1. Final interpolation pass â€” replace any remaining {{merge_field}} tokens
     #    with current Airtable values before rendering to PDF.
     merge_ctx = build_merge_context(property_id)
     final_body = _interpolate_merge_fields(body.body_html, merge_ctx)
@@ -110,7 +110,7 @@ async def submit_contract(
         pdf_bytes = html_to_pdf(html)
     except Exception as e:  # noqa: BLE001
         logger.error("pdf.render_failed err=%s", e)
-        raise HTTPException(500, "Failed to render PDF — check WeasyPrint installation.")
+        raise HTTPException(500, "Failed to render PDF â€” check WeasyPrint installation.")
 
     # 3. Push to DocuSeal
     submitters_payload = [
@@ -154,7 +154,7 @@ def _interpolate_merge_fields(html: str, ctx: dict[str, Any]) -> str:
     """Replace any remaining `{{key}}` tokens with values from `ctx`.
 
     Tokens whose key isn't in ctx are left untouched so they're visible in the
-    rendered PDF — that way nothing fails silently.
+    rendered PDF â€” that way nothing fails silently.
     """
     def repl(m: re.Match) -> str:
         key = m.group(1)

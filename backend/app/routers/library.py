@@ -1,4 +1,4 @@
-"""Document library — browse, prepare, send.
+"""Document library â€” browse, prepare, send.
 
 Three endpoints surface the catalog defined in
 ``app/services/document_library.py``:
@@ -10,11 +10,11 @@ Three endpoints surface the catalog defined in
 The send endpoint replaces the old per-template ``/api/contracts/.../submit``
 single-action flow with three modes:
 
-* ``sign``      — render the HTML to PDF, push to DocuSeal for e-signature.
+* ``sign``      â€” render the HTML to PDF, push to DocuSeal for e-signature.
                  (Mock DocuSeal kicks in automatically when no token is set.)
-* ``email_pdf`` — render to PDF, attach to an email with the caller's custom
+* ``email_pdf`` â€” render to PDF, attach to an email with the caller's custom
                  cover text and subject.
-* ``email_html`` — send the edited HTML as the email body directly. No PDF.
+* ``email_html`` â€” send the edited HTML as the email body directly. No PDF.
 
 All three persist a Submissions audit row so the flow board shows the action.
 """
@@ -32,7 +32,7 @@ from app.core.email_client import send_email
 from app.core.logger import get_logger
 from app.core.pdf_renderer import html_to_pdf, html_to_pdf_chromium, render_contract_html
 from app.core.signing import SigningRecipient, replay_mock_completion, send_for_signature
-from app.db import airtable_client as at
+from app.db import supabase_client as at
 from app.routers.uploads import UPLOADS_ROOT, _public_url
 from app.services.document_library import (
     DocMode,
@@ -88,11 +88,11 @@ def list_library(
 
 
 # ---------------------------------------------------------------------------
-# Base-template editor — agent updates the *underlying* HTML body of a
+# Base-template editor â€” agent updates the *underlying* HTML body of a
 # library document. The change applies to every future property send. Files
 # live at `app/templates/library/{doc_id}.html`. For TPLs that have never
 # been edited (placeholder body), the first PUT promotes them from
-# `master_doc` → `library_file` on the next service restart.
+# `master_doc` â†’ `library_file` on the next service restart.
 # ---------------------------------------------------------------------------
 @router.get("/{doc_id}/raw")
 def get_raw_body(
@@ -103,7 +103,7 @@ def get_raw_body(
 
     Used by the homepage library editor to edit the underlying template.
     """
-    from app.services.document_library import _LIBRARY_DIR, get_body  # local import — avoid cycles
+    from app.services.document_library import _LIBRARY_DIR, get_body  # local import â€” avoid cycles
     doc = get_document(doc_id)
     if not doc:
         raise HTTPException(404, f"Unknown library document: {doc_id}")
@@ -142,7 +142,7 @@ def update_raw_body(
     target = _LIBRARY_DIR / f"{doc_id}.html"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(body.body_html, encoding="utf-8")
-    # Hot-promote master_doc → library_file so subsequent reads pick up the
+    # Hot-promote master_doc â†’ library_file so subsequent reads pick up the
     # new file in the same server process.
     if doc.source == "master_doc":
         import dataclasses
@@ -266,7 +266,7 @@ def list_sent_for_property(
 ) -> dict:
     """Return every document sent for a property, newest-first, from the
     structured ``Sent_Documents`` table. Drives the "Documents on this stage"
-    widget — each row carries its stage, channel, status and (for sign /
+    widget â€” each row carries its stage, channel, status and (for sign /
     email_pdf) a link to the stored PDF."""
     from app.services import sent_documents as sd  # noqa: PLC0415
     return {"property_id": property_id, "sent": sd.list_for_property(property_id)}
@@ -303,7 +303,7 @@ def prepare_library_doc(
 
 
 # ---------------------------------------------------------------------------
-# Send — three modes
+# Send â€” three modes
 # ---------------------------------------------------------------------------
 SendMode = Literal["sign", "email_pdf", "email_html"]
 
@@ -312,7 +312,7 @@ class Recipient(BaseModel):
     role: str = Field(default="Recipient", examples=["Landlord", "Tenant", "Agent"])
     name: str = ""
     email: EmailStr
-    # True → must sign (anchor tab placed); False → CC (informational only,
+    # True â†’ must sign (anchor tab placed); False â†’ CC (informational only,
     # envelope still routes to them). Defaults true so existing callers don't
     # need to change.
     mandatory: bool = True
@@ -323,9 +323,9 @@ class SendRequest(BaseModel):
     title: str = Field(..., description="Subject / DocuSeal envelope title")
     body_html: str = Field(..., description="Edited document body (HTML)")
     recipients: list[Recipient] = Field(default_factory=list)
-    # Used only when mode = email_pdf — wraps the attached PDF in a cover email
+    # Used only when mode = email_pdf â€” wraps the attached PDF in a cover email
     email_cover_html: Optional[str] = None
-    # Map of /pg_sigN/ anchor → signature id, e.g. {"/pg_sig1/": "lesley_smith"}.
+    # Map of /pg_sigN/ anchor â†’ signature id, e.g. {"/pg_sig1/": "lesley_smith"}.
     # Unset slots fall back to the first available signature in the registry.
     signature_choices: dict[str, str] = Field(default_factory=dict)
 
@@ -346,13 +346,13 @@ def _interpolate(html: str, ctx: dict[str, Any]) -> str:
 
 
 _HTML_UNICODE_ASCII = {
-    "—": "--", "–": "-", "’": "'", "‘": "'", "“": '"', "”": '"',
-    "…": "...", " ": " ", "£": "GBP ", "€": "EUR ", "•": "*", "→": "->",
+    "â€”": "--", "â€“": "-", "â€™": "'", "â€˜": "'", "â€œ": '"', "â€": '"',
+    "â€¦": "...", " ": " ", "Â£": "GBP ", "â‚¬": "EUR ", "â€¢": "*", "â†’": "->",
 }
 
 
 def _ascii_safe_html(s: str) -> str:
-    """Normalise unicode → ASCII-safe so fpdf2's core Helvetica can render it."""
+    """Normalise unicode â†’ ASCII-safe so fpdf2's core Helvetica can render it."""
     for k, v in _HTML_UNICODE_ASCII.items():
         s = s.replace(k, v)
     return s.encode("latin-1", errors="replace").decode("latin-1")
@@ -367,7 +367,7 @@ def _render_pdf_with_fallback(
     """Render the document HTML to PDF.
 
     Primary: WeasyPrint (proper CSS rendering, branded shell).
-    Fallback: fpdf2's ``write_html`` — keeps paragraphs, lists, headings,
+    Fallback: fpdf2's ``write_html`` â€” keeps paragraphs, lists, headings,
     tables, line breaks. Used when WeasyPrint's native deps (GTK/Pango/Cairo)
     aren't available, typically on Windows dev machines.
 
@@ -388,23 +388,23 @@ def _render_pdf_with_fallback(
     try:
         return html_to_pdf_chromium(html)
     except Exception as e:  # noqa: BLE001
-        logger.warning("library.chromium_unavailable err=%s — trying WeasyPrint", e)
+        logger.warning("library.chromium_unavailable err=%s â€” trying WeasyPrint", e)
 
-    # 2) Next: WeasyPrint (full CSS, needs GTK native libs — Linux prod).
+    # 2) Next: WeasyPrint (full CSS, needs GTK native libs â€” Linux prod).
     try:
         return html_to_pdf(html)
     except OSError as e:
-        logger.warning("library.weasyprint_unavailable err=%s — using fpdf2 fallback", e)
+        logger.warning("library.weasyprint_unavailable err=%s â€” using fpdf2 fallback", e)
     except Exception as e:  # noqa: BLE001
-        logger.warning("library.weasyprint_failed err=%s — using fpdf2 fallback", e)
+        logger.warning("library.weasyprint_failed err=%s â€” using fpdf2 fallback", e)
 
-    # ---- fpdf2 fallback (last resort — plain layout) ---------------------
+    # ---- fpdf2 fallback (last resort â€” plain layout) ---------------------
     # We feed the editor body HTML directly to fpdf2's HTML writer, which
     # honours <p> / <br> / <h1-6> / <b> / <i> / <ul>/<ol>/<li> / <table>.
-    # That preserves paragraph breaks, bullets and headings — the earlier
+    # That preserves paragraph breaks, bullets and headings â€” the earlier
     # `re.sub("<[^>]+>", " ", ...)` approach collapsed everything into one
     # wall of text (reported by the user in the screenshot dated 2026-05-16).
-    from fpdf import FPDF  # local import — only required for the fallback path
+    from fpdf import FPDF  # local import â€” only required for the fallback path
 
     class _PDF(FPDF):
         def header(self):
@@ -414,7 +414,7 @@ def _render_pdf_with_fallback(
             self.set_text_color(255, 255, 255)
             self.set_font("Helvetica", "B", 10)
             self.set_xy(15, 4.5)
-            self.cell(0, 5, _ascii_safe_html(f"Palace Gate Lettings — {title}"), ln=1)
+            self.cell(0, 5, _ascii_safe_html(f"Palace Gate Lettings â€” {title}"), ln=1)
             self.set_text_color(0, 0, 0)
             self.set_y(20)
 
@@ -451,8 +451,8 @@ def _persist_doc_pdf(property_id: str, doc_id: str, pdf_bytes: bytes) -> str:
 
 
 class PreviewRequest(BaseModel):
-    body_html: str = Field(..., description="Current editor body — what the agent sees right now")
-    # Optional /pg_sigN/ → signature id map. Used by both preview and PDF
+    body_html: str = Field(..., description="Current editor body â€” what the agent sees right now")
+    # Optional /pg_sigN/ â†’ signature id map. Used by both preview and PDF
     # download so the agent sees the same baked-in signature they'd send.
     signature_choices: dict[str, str] = Field(default_factory=dict)
 
@@ -466,11 +466,11 @@ def download_library_pdf(
 ):
     """Render the document to PDF and stream the bytes back.
 
-    Same rendering pipeline as ``/send`` (HTML → WeasyPrint, fpdf2 fallback on
-    Windows) — gives the agent the exact PDF that would be emailed/signed,
+    Same rendering pipeline as ``/send`` (HTML â†’ WeasyPrint, fpdf2 fallback on
+    Windows) â€” gives the agent the exact PDF that would be emailed/signed,
     but as a download so they can attach it from their own email client.
     """
-    from fastapi.responses import Response  # local import — only this route needs it
+    from fastapi.responses import Response  # local import â€” only this route needs it
 
     doc = get_document(doc_id)
     if not doc:
@@ -485,7 +485,7 @@ def download_library_pdf(
     parts = [doc.name]
     if addr:
         parts.append(addr)
-    raw = " — ".join(parts)
+    raw = " â€” ".join(parts)
     safe = "".join(c if c.isalnum() or c in " -_." else "_" for c in raw)[:120].strip() or "document"
     filename = f"{safe}.pdf"
     return Response(
@@ -502,10 +502,10 @@ def preview_library_doc(
     body: PreviewRequest,
     _: Agent = Depends(require_agent),
 ) -> dict[str, Any]:
-    """Render the final document — interpolated + wrapped in the brand shell.
+    """Render the final document â€” interpolated + wrapped in the brand shell.
 
     Returns the print-ready HTML the agent can drop into a preview iframe.
-    Doesn't send anything or write to Airtable — pure projection.
+    Doesn't send anything or write to Airtable â€” pure projection.
     """
     doc = get_document(doc_id)
     if not doc:
@@ -577,7 +577,7 @@ async def send_library_doc(
         result.update({"submission": submission.to_dict(), "pdf_url": pdf_url})
 
         # In test env, fire the local mock-completion webhook against the same
-        # PG_04 handler — keeps the existing fast-feedback loop intact. In dev /
+        # PG_04 handler â€” keeps the existing fast-feedback loop intact. In dev /
         # production the real provider POSTs /webhook/docusign (or /docuseal-signed)
         # when a signer actually completes.
         if submission.provider == "mock":
@@ -631,8 +631,8 @@ async def send_library_doc(
     # --- Record the send in Sent_Documents (per-stage audit) -----------
     # Structured row instead of the old Submissions "Library:" JSON-text hack.
     # The envelope id is stored so the signing webhook can flip Status to
-    # Signed/Declined later (PG_04). Best-effort — never breaks the send.
-    from app.services import sent_documents as sd  # noqa: PLC0415 — avoid load cycle
+    # Signed/Declined later (PG_04). Best-effort â€” never breaks the send.
+    from app.services import sent_documents as sd  # noqa: PLC0415 â€” avoid load cycle
     submission_info = result.get("submission") or {}
     sd.record_sent(
         property_id=property_id,

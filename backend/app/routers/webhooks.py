@@ -1,4 +1,4 @@
-"""Legacy webhook endpoints — kept for backwards compatibility with Tally and
+"""Legacy webhook endpoints â€” kept for backwards compatibility with Tally and
 DocuSeal callbacks. New deployments should drive everything through
 `/api/forms/*`, but Tally-hosted forms still POST here.
 """
@@ -33,7 +33,7 @@ def _tally_fields(body: dict) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# Tally — PG_01 take-on
+# Tally â€” PG_01 take-on
 # ---------------------------------------------------------------------------
 @router.post("/webhook/property-takeon")
 async def webhook_property_takeon(req: Request) -> dict:
@@ -54,13 +54,13 @@ def _to_float(v: Any) -> float | None:
     if v is None:
         return None
     try:
-        return float(str(v).replace(",", "").replace("£", ""))
+        return float(str(v).replace(",", "").replace("Â£", ""))
     except Exception:
         return None
 
 
 # ---------------------------------------------------------------------------
-# Tally — PG_02 admin
+# Tally â€” PG_02 admin
 # ---------------------------------------------------------------------------
 @router.post("/webhook/landlord-admin")
 async def webhook_landlord_admin(req: Request) -> dict:
@@ -70,7 +70,7 @@ async def webhook_landlord_admin(req: Request) -> dict:
     if not property_id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Hidden 'id' field missing")
     payload = LandlordAdminInput(
-        # property_post_code field retired in Wave A — already on Property record from PG_01
+        # property_post_code field retired in Wave A â€” already on Property record from PG_01
         block_manager_name=get_by_label(fields, "block manager name"),
         block_manager_address=get_by_label(fields, "block manager address"),
         block_manager_postal_code=get_by_label(fields, "block manager postal code"),
@@ -123,7 +123,7 @@ async def webhook_landlord_admin(req: Request) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Tally — PG_02b verification
+# Tally â€” PG_02b verification
 # ---------------------------------------------------------------------------
 @router.post("/webhook/landlord-verification")
 async def webhook_landlord_verification(req: Request) -> dict:
@@ -135,7 +135,7 @@ async def webhook_landlord_verification(req: Request) -> dict:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Hidden 'id' field missing")
     payload = LandlordVerificationInput(
         individual_or_company=get_by_label(fields, "individual or company") or "Individual",
-        # residency retired from this form in Wave B — the handler reads it from
+        # residency retired from this form in Wave B â€” the handler reads it from
         # the landlord's UK_Resident_Status (PG_02). Legacy Tally payloads may
         # still carry it, so pass it through when present as a fallback.
         residency=get_by_label(fields, "residency status") or None,
@@ -158,7 +158,7 @@ async def webhook_landlord_verification(req: Request) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Tally — PG_03 offer
+# Tally â€” PG_03 offer
 # ---------------------------------------------------------------------------
 @router.post("/webhook/offer")
 async def webhook_offer(req: Request) -> dict:
@@ -205,17 +205,17 @@ async def webhook_docuseal(req: Request, x_docuseal_signature: str | None = Head
 # ---------------------------------------------------------------------------
 # DocuSign Connect webhook
 # ---------------------------------------------------------------------------
-# DocuSign Admin → Connect → New Configuration (JSON) is configured to POST
+# DocuSign Admin â†’ Connect â†’ New Configuration (JSON) is configured to POST
 # envelope events here. We verify the optional HMAC header (X-DocuSign-Signature-1
 # when "Include HMAC Signature" is on), normalise the payload, and hand off
-# to the same PG_04 handler the DocuSeal webhook uses — so the downstream
+# to the same PG_04 handler the DocuSeal webhook uses â€” so the downstream
 # Properties/Landlords/Tenants writes are single-pathed regardless of provider.
 @router.post("/webhook/docusign")
 async def webhook_docusign(
     req: Request,
     x_docusign_signature_1: str | None = Header(default=None, convert_underscores=True),
 ) -> dict:
-    import base64  # noqa: PLC0415 — local imports keep import-time graph slim
+    import base64  # noqa: PLC0415 â€” local imports keep import-time graph slim
     import hashlib
     import hmac
     from app.core.signing import normalise_docusign_event  # noqa: PLC0415
@@ -242,9 +242,9 @@ async def webhook_docusign(
             )
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid DocuSign signature")
     else:
-        # No secret configured — log loud so dev knows. Connect will still
+        # No secret configured â€” log loud so dev knows. Connect will still
         # accept the response so envelopes don't retry forever.
-        logger.warning("DocuSign Connect HMAC secret not set — accepting unverified webhook")
+        logger.warning("DocuSign Connect HMAC secret not set â€” accepting unverified webhook")
 
     try:
         body = json.loads(raw)
@@ -307,7 +307,7 @@ async def docusign_poll(envelope_id: str) -> dict:
     }
     normalised = normalise_docusign_event(stitched)
     if summary.get("status") != "completed":
-        # Don't run the handler unless it's actually done — otherwise we'd
+        # Don't run the handler unless it's actually done â€” otherwise we'd
         # flip TC_Signed prematurely on partial signs.
         return {"envelope_id": envelope_id, "status": summary.get("status"), "handled": False}
     result = await handle_docuseal_event(normalised)
@@ -341,7 +341,7 @@ async def webhook_tenant_pack(req: Request) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Paragon — inbound referencing outcome (Gap 3)
+# Paragon â€” inbound referencing outcome (Gap 3)
 # ---------------------------------------------------------------------------
 @router.post("/webhook/paragon")
 async def webhook_paragon(req: Request) -> dict:
@@ -356,17 +356,17 @@ async def webhook_paragon(req: Request) -> dict:
       - Write ``Referencing_Status`` = the outcome (the singleSelect options are
         exactly Pass/Conditional/Fail).
       - ``Referencing_Recorded`` is set True only for Pass/Conditional. A **Fail**
-        leaves it False so the Stage 5→6 gate stays blocked until the agent
-        re-references (e.g. after adding a guarantor) — the gate condition is
+        leaves it False so the Stage 5â†’6 gate stays blocked until the agent
+        re-references (e.g. after adding a guarantor) â€” the gate condition is
         "outcome recorded", and we don't want a failed reference to satisfy it.
       - On Conditional/Fail, surface a guarantor-required warning via the gate
         evaluation (no dedicated Guarantor_Required column exists today).
-      - Re-evaluate the Stage 5→6 gate so a Pass advances automatically.
+      - Re-evaluate the Stage 5â†’6 gate so a Pass advances automatically.
 
     Auth: real Paragon would HMAC-sign; in mock mode there's no secret. If
     ``PARAGON_WEBHOOK_SECRET`` is configured we require it as ``?token=``.
     """
-    from app.db import airtable_client as at  # noqa: PLC0415
+    from app.db import supabase_client as at  # noqa: PLC0415
     from app.handlers.pg00_gate import evaluate_gate  # noqa: PLC0415
 
     secret = (getattr(settings, "paragon_webhook_secret", "") or "").strip()
@@ -377,7 +377,7 @@ async def webhook_paragon(req: Request) -> dict:
 
     body = await req.json()
     ref = (body.get("reference_number") or "").strip()
-    outcome = (body.get("outcome") or "").strip().title()  # "pass" → "Pass"
+    outcome = (body.get("outcome") or "").strip().title()  # "pass" â†’ "Pass"
     if outcome not in ("Pass", "Conditional", "Fail"):
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
@@ -410,13 +410,13 @@ async def webhook_paragon(req: Request) -> dict:
     if outcome in ("Conditional", "Fail"):
         has_guar = bool((tf.get("Guarantor_Name") or "").strip())
         warnings.append(
-            f"Referencing {outcome} for {tf.get('Name') or tenant_id} — guarantor "
+            f"Referencing {outcome} for {tf.get('Name') or tenant_id} â€” guarantor "
             f"{'on file' if has_guar else 'REQUIRED (none on file)'}."
         )
         if not has_guar:
             actions.append("Collect guarantor details and instruct a guarantor reference.")
 
-    # Re-evaluate the Stage 5→6 gate (Pass advances; Fail stays blocked).
+    # Re-evaluate the Stage 5â†’6 gate (Pass advances; Fail stays blocked).
     gate_out = None
     prop_ids = tf.get("Property Id") or []
     property_id = prop_ids[0] if prop_ids else None

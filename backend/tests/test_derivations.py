@@ -36,8 +36,10 @@ def test_tenancy_type_apt_central_london():
     assert derive_tenancy_type(50_000, "SW1A 1AA") == "APT"
 
 
-def test_tenancy_type_common_law_outside_london():
-    assert derive_tenancy_type(50_000, "M1 1AA") == "Common Law"
+def test_tenancy_type_is_postcode_independent():
+    # Pure rent test since the 2026-05-16 correction — postcode is irrelevant
+    # (Housing Act 1988 £100k threshold applies nationwide).
+    assert derive_tenancy_type(50_000, "M1 1AA") == "APT"
 
 
 def test_tenancy_type_high_rent_is_common_law():

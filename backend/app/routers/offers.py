@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from app.core.auth import Agent, require_agent
-from app.db import airtable_client as at
+from app.db import supabase_client as at
 from app.services import offers as offers_svc
 
 router = APIRouter(tags=["offers"])

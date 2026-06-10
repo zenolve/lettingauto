@@ -57,13 +57,19 @@ in the backend `.env` as `AGENT_BOOTSTRAP_EMAIL` / `AGENT_BOOTSTRAP_PASSWORD`.
    │  handlers/ ─ PG_00 .. PG_07 logic    │
    └──────────────┬───────────────────────┘
                   │
-        ┌─────────┴──────────┬────────────────┐
-        ▼                    ▼                ▼
-   ┌─────────┐         ┌──────────┐    ┌────────────┐
-   │Airtable │         │ DocuSeal │    │   SMTP     │
-   │ (data)  │         │ (sign)   │    │ (notify)   │
-   └─────────┘         └──────────┘    └────────────┘
+        ┌─────────┴──────────┬────────────────┬───────────────┐
+        ▼                    ▼                ▼               ▼
+   ┌──────────┐        ┌──────────┐    ┌────────────┐  ┌──────────┐
+   │ Supabase │        │ DocuSeal │    │   SMTP     │  │  Stripe  │
+   │(Postgres)│        │ (sign)   │    │ (notify)   │  │(payments)│
+   └──────────┘        └──────────┘    └────────────┘  └──────────┘
 ```
+
+> **Data layer:** Supabase (Postgres). Apply
+> `supabase/migrations/001_init.sql` once and set `SUPABASE_DB_URL` — see
+> [docs/SUPABASE_MIGRATION.md](docs/SUPABASE_MIGRATION.md). Locally,
+> `docker compose -f docker-compose.dev.yml up` starts a Postgres with the
+> schema pre-applied.
 
 ### Form parity
 
@@ -87,7 +93,7 @@ in production and not protected by a Tally signing secret.
 The contract editor lives at `/agent/properties/:id/contracts/:template`. It
 uses **Tiptap** (ProseMirror) for the editing surface and renders mustache-style
 merge fields (`{{landlord_full_name}}`, `{{property_address}}`, …) from the
-linked Airtable records on first open. The user can freely edit the body. On
+linked database records on first open. The user can freely edit the body. On
 submit, the backend converts the saved HTML to PDF (WeasyPrint) and creates a
 DocuSeal submission with that PDF as the document and the right signing roles
 filled in.
@@ -105,7 +111,9 @@ See `backend/app/templates/contracts/*.html`.
 Done:
 
 - Full project structure, config, env scaffolding
-- Airtable client with retry + rate-limit handling
+- Supabase (Postgres) data layer — relational schema in `supabase/migrations/`,
+  Airtable-shape adapter in `backend/app/db/supabase_client.py`
+- Stripe payments scaffold (checkout sessions + webhook → `payments` table)
 - DocuSeal client with submission + webhook signature verification
 - SMTP email client with Palace Gate branding
 - Gate evaluator (PG_00) — all stage transitions encoded
@@ -120,10 +128,11 @@ Done:
 Still needs Palace Gate input (see spec §10):
 
 - DocuSeal template IDs (15, 16, 18, 20, 22 are placeholders in `config.py`)
-- Real Airtable table IDs for `Tenant` and `Compliance`
-- SMTP credentials + DocuSeal API token (drop into `.env`)
+- A Supabase project + its `SUPABASE_DB_URL` (run `supabase/migrations/001_init.sql` once)
+- SMTP credentials + DocuSeal API token + Stripe keys (drop into `.env`)
 - Lesley's email for NRL diary assignments
-- Confirm `Stage agent` field on Stages table contains the agent email
+- Populate `stages.stage_agent` with the per-stage agent emails (seeded empty;
+  summaries fall back to `ADMIN_EMAIL`)
 
 All of these are marked with `# TODO(palace-gate):` comments in code.
 
@@ -135,7 +144,8 @@ backend/
     main.py
     config.py
     db/
-      airtable_client.py
+      supabase_client.py  # Postgres adapter (Airtable-shape records)
+      schema.py           # field-name -> column registry
     core/
       auth.py
       email_client.py

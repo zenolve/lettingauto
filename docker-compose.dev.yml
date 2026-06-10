@@ -1,15 +1,43 @@
 # Local development stack (hot-reload). Run with:
 #   docker compose -f docker-compose.dev.yml up
 # For the production/droplet stack use the default docker-compose.yml.
+#
+# `db` is a stand-in for hosted Supabase: plain Postgres 16 with the schema
+# from supabase/migrations/ auto-applied on first start (the files are mounted
+# into /docker-entrypoint-initdb.d). Point the backend at it with
+#   SUPABASE_DB_URL=postgresql://postgres:postgres@db:5432/lettingauto   (in-network)
+#   SUPABASE_DB_URL=postgresql://postgres:postgres@localhost:54322/lettingauto  (from host)
+# To re-apply the schema from scratch: docker compose -f docker-compose.dev.yml down -v
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: lettingauto
+    ports: ["54322:5432"]
+    volumes:
+      - ./supabase/migrations:/docker-entrypoint-initdb.d:ro
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d lettingauto"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   backend:
     build:
       context: ./backend
     env_file: ./backend/.env
+    environment:
+      # In-network DB URL wins over the localhost one in .env.
+      SUPABASE_DB_URL: postgresql://postgres:postgres@db:5432/lettingauto
     ports: ["8000:8000"]
     volumes:
       - ./backend:/app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    depends_on:
+      db:
+        condition: service_healthy
 
   frontend:
     image: node:20-alpine
@@ -21,3 +49,6 @@ services:
     environment:
       VITE_API_URL: http://localhost:8000
     depends_on: [backend]
+
+volumes:
+  pgdata:

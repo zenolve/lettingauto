@@ -1,4 +1,4 @@
-"""PG_01 — Property take-on handler (spec §6.1).
+"""PG_01 â€” Property take-on handler (spec Â§6.1).
 
 Driven by either:
 - the internal POST /api/forms/property-takeon endpoint (preferred), or
@@ -15,7 +15,7 @@ from app.config import settings
 from app.core.auth import FormTokenPayload, create_form_token
 from app.core.email_client import send_admin_form_link
 from app.core.logger import get_logger
-from app.db import airtable_client as at
+from app.db import supabase_client as at
 from app.handlers.pg00_gate import evaluate_gate, find_stage_by_order
 from app.models.common import PropertyTakeonInput
 from app.services.derivations import derive_tenancy_type
@@ -24,9 +24,9 @@ logger = get_logger(__name__)
 
 
 async def handle_takeon(payload: PropertyTakeonInput) -> dict:
-    # Annualise the rent based on the chosen frequency (Weekly × 52 or
-    # Monthly × 12) — drives APT vs. Common Law classification per the
-    # Housing Act 1988 £100k threshold.
+    # Annualise the rent based on the chosen frequency (Weekly Ã— 52 or
+    # Monthly Ã— 12) â€” drives APT vs. Common Law classification per the
+    # Housing Act 1988 Â£100k threshold.
     if payload.asking_rent_pcm:
         multiplier = 52 if payload.rent_frequency == "Weekly" else 12
         annual_rent = payload.asking_rent_pcm * multiplier
@@ -37,7 +37,7 @@ async def handle_takeon(payload: PropertyTakeonInput) -> dict:
     stage_1 = find_stage_by_order(1)
     stage_1_id = stage_1["id"] if stage_1 else None
 
-    # 1. Create Property record. Note the trailing space on "Annual Rent " —
+    # 1. Create Property record. Note the trailing space on "Annual Rent " â€”
     #    that's how the field is named in the live Airtable base.
     property_fields: dict = {
         "Address": payload.address,
@@ -97,7 +97,7 @@ async def handle_takeon(payload: PropertyTakeonInput) -> dict:
             form_url=form_url,
         )
 
-    # 6. Gate check — should pass immediately (landlord just linked)
+    # 6. Gate check â€” should pass immediately (landlord just linked)
     gate = await evaluate_gate(property_id, target_stage=2)
 
     return {

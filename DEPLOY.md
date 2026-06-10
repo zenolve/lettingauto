@@ -46,7 +46,8 @@ Set at least:
 | `FRONTEND_BASE_URL` | `http://<droplet-ip>` or `https://<your-domain>` — used in the emails sent to landlords/tenants, so it must be the public URL |
 | `JWT_SECRET` | a long random string |
 | `AGENT_BOOTSTRAP_EMAIL` / `AGENT_BOOTSTRAP_PASSWORD` | your admin login |
-| `AIRTABLE_TOKEN` / `AIRTABLE_BASE_ID` + the `AIRTABLE_TABLE_*` ids | from Airtable |
+| `SUPABASE_DB_URL` | Postgres connection string (Supabase → Settings → Database, session pooler) |
+| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | from Stripe (optional — payments endpoints return 501 when blank) |
 | `DOCUSIGN_*`, `SMTP_*`, `PARAGON_*` | as applicable |
 
 Then drop in the DocuSign private key (mounted read-only, never baked into an image):
@@ -74,7 +75,7 @@ docker compose down               # stop (volumes/data preserved)
 ```
 
 Persistent data lives in named volumes (`uploads`, `signatures`) and survives
-rebuilds. Airtable is the real datastore.
+rebuilds. Supabase (Postgres) is the real datastore.
 
 ---
 
@@ -109,18 +110,19 @@ is hit. Add a daily host cron:
 0 7 * * * curl -s "http://localhost/api/forms/scheduler/run?token=<token>" >/dev/null
 ```
 
-## 8. First-run Airtable tables
+## 8. First-run database schema
 
-If this is a brand-new Airtable base, create the app-managed tables once:
+Create a Supabase project, open the SQL Editor, and run
+`supabase/migrations/001_init.sql` once. It creates every table (with seed
+data for the 9 pipeline stages) and locks the auto-generated REST surface
+with RLS. Then put the project's connection string into `backend/.env` as
+`SUPABASE_DB_URL`. Full details + verification steps:
+[docs/SUPABASE_MIGRATION.md](docs/SUPABASE_MIGRATION.md).
 
 ```bash
-docker compose exec backend python -m scripts.create_offers_table
-docker compose exec backend python -m scripts.create_sent_documents_table
-# then copy the printed ids into backend/.env and `docker compose up -d`
+# optional sanity check against the live DB (creates + deletes its own rows)
+docker compose exec backend python -m scripts.smoke_supabase
 ```
-
-(For the existing base these already exist — the scripts are idempotent and
-just print the ids.)
 
 ---
 

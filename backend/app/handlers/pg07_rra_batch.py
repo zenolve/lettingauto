@@ -1,10 +1,10 @@
-"""PG_07 — Renters Rights Act batch (spec §6.8).
+"""PG_07 â€” Renters Rights Act batch (spec Â§6.8).
 
 On-demand workflow that serves the RRA information sheet as a **PDF
 attachment** to every active APT tenant who hasn't already received it.
 
-Master doc CRITICAL DEADLINE: 31 May 2026 — every active APT tenant must
-have been served the RRA sheet by this date. Fine up to £7,000 per breach.
+Master doc CRITICAL DEADLINE: 31 May 2026 â€” every active APT tenant must
+have been served the RRA sheet by this date. Fine up to Â£7,000 per breach.
 """
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from datetime import date
 from app.config import settings
 from app.core.email_client import render, send_email
 from app.core.logger import get_logger
-from app.db import airtable_client as at
+from app.db import supabase_client as at
 from app.handlers.pg05_tenant_pack import _persist_served_pdf
 from app.services.prescribed_docs import render_prescribed_pdf
 
@@ -25,8 +25,8 @@ async def handle_rra_batch() -> dict:
     # Properties of Tenancy Type "APT" that haven't been flagged as served.
     formula = at.and_(
         at.eq("Tenancy Type", "APT"),
-        # NOT() handles both "false" and "unset" on the checkbox.
-        f"NOT({{RRA_Sheet_Served}})",
+        # eq(..., False) matches both "false" and "unset" on the checkbox.
+        at.eq("RRA_Sheet_Served", False),
     )
     props = at.search(at.TableNames.PROPERTIES, formula=formula)
     served: list[str] = []
@@ -42,7 +42,7 @@ async def handle_rra_batch() -> dict:
             continue
         try:
             # Render the RRA PDF once per property, then serve to every named
-            # tenant on the tenancy (multi-tenant / HMO support — step 26).
+            # tenant on the tenancy (multi-tenant / HMO support â€” step 26).
             primary = at.get(at.TableNames.TENANTS, tenant_ids[0]).get("fields", {})
             doc, pdf_bytes = render_prescribed_pdf(
                 "rra_sheet",
@@ -61,7 +61,7 @@ async def handle_rra_batch() -> dict:
                         continue
                     await send_email(
                         email,
-                        subject="Renters' Rights Act 2025 — important information for your tenancy",
+                        subject="Renters' Rights Act 2025 â€” important information for your tenancy",
                         html=html,
                         attachments=[{
                             "filename": "RRA_Information_Sheet.pdf",

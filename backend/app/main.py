@@ -16,6 +16,7 @@ from app.routers import (
     landlords,
     library,
     offers,
+    payments,
     properties,
     referencing,
     signatures,
@@ -52,6 +53,7 @@ def create_app() -> FastAPI:
     app.include_router(checklist.router)
     app.include_router(landlords.router)
     app.include_router(offers.router)
+    app.include_router(payments.router)
     app.include_router(signatures.router)
     app.include_router(uploads.router)
     app.include_router(webhooks.router)
