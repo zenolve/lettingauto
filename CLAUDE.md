@@ -112,6 +112,52 @@ via `tailwind.config.js` + `styles.css` primitives (`card`, `btn-primary`,
 - Port 8000 is often occupied by the user's own backend — run test instances
   on another port and don't kill processes you didn't start.
 
+## Repo map (read the right file first, don't explore)
+
+```
+backend/app/
+  config.py                 # ALL env-driven settings (pydantic) — nothing reads os.environ directly
+  main.py                   # FastAPI app + router registration + /uploads static mount
+  db/
+    schema.py               # Airtable-name → column/junction/lookup registry (THE mapping)
+    supabase_client.py      # adapter: CRUD, structured filters, TTL cache, agency scope, try_transition CAS
+  core/
+    auth.py                 # Supabase JWT (ES256 JWKS + HS256) verify, agency membership, scope lifecycle, form tokens
+    branding.py             # get_brand(): current agency's name/colours for all outbound artifacts
+    signing.py              # provider abstraction (mock/DocuSeal/DocuSign) + webhook normaliser
+    docusign_client.py / docuseal_client.py / paragon_client.py / email_client.py / pdf_renderer.py
+  handlers/                 # the pipeline business logic (PG_00 gate … PG_07 RRA batch)
+    pg00_gate.py            # stage-transition conditions + gate_log writes
+    pg01_takeon.py          # property+landlord creation (payment-agnostic; pay-first lives in forms+billing)
+    pg04_docuseal.py        # signing webhook → TC/TA/OFFER routing (sets agency scope first)
+  routers/
+    forms.py                # take-on (pay-first intent), takeon-status poller, public landlord forms, stage guards
+    payments.py             # Stripe checkout + /webhook/stripe (fulfils take-on intents)
+    agencies.py             # register / me / branding PATCH
+    properties.py           # CRUD, flags catalog+PATCH, cascade delete, re-evaluate gate
+    tenants.py / landlords.py  # entity editors (typed field allowlists)
+    library.py              # document library browse/prepare/send (sign | email_pdf | email_html)
+    webhooks.py             # DocuSign Connect, Paragon, legacy Tally shells (all scope-setting)
+  services/
+    billing.py              # £50 intent + mark_paid_and_fulfill (CAS) + billing_summary
+    offers.py               # offer lifecycle (accept/supersede/close)
+    merge_fields.py         # {{merge_field}} context from records (incl. agency_*)
+    document_library.py / prescribed_docs.py / sent_documents.py / compliance.py / derivations.py
+  templates/                # emails/ (Jinja), contracts/ (_shell.html), library/ (42 tpls + master TA/T&C)
+backend/scripts/
+  apply_migrations.py       # run supabase/migrations/*.sql against SUPABASE_DB_URL + verify
+  smoke_supabase.py         # 37-check e2e incl. multi-tenant isolation (safe on live DB)
+frontend/src/
+  lib/                      # api.ts (axios+auth), auth.ts (supabase session), agency.ts (me store), supabase.ts, stages.ts
+  components/               # AgencyGate, OnboardingModal, RequireAuth, layout/{Agent,Public}Layout, ui/* (incl. EntityEditDrawer)
+  pages/                    # Login, RegisterAgency, Settings, Dashboard, Properties, PropertyDetail (stage views),
+                            # TakeonComplete (payment poller), forms/* (takeon/offer/landlord forms), Library*, Signatures
+  styles.css + ../tailwind.config.js   # the Editorial Mesh design system (tokens + primitives)
+frontend/design-previews/   # landing drafts A–F (F chosen)
+supabase/migrations/        # 001 schema+seed, 002 agencies/RLS (both applied to live project)
+docs/                       # BUSINESS_MODEL.md, COMMERCIAL_SETUP.md, SUPABASE_MIGRATION.md
+```
+
 ## Key docs
 
 - `docs/BUSINESS_MODEL.md` — how the product makes money (£50/tenancy,
