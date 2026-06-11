@@ -44,8 +44,7 @@ export default function Signatures() {
 
   return (
     <div className="space-y-6">
-      <header className="rounded-lg border border-cream-300 bg-white shadow-paper p-6 md:p-8"
-        style={{ backgroundImage: "radial-gradient(600px 250px at 100% 0%, rgba(201, 162, 76, 0.07), transparent 60%)" }}>
+      <header className="card bg-mesh-corner p-6 md:p-8">
         <div className="kicker">Document store</div>
         <h1 className="mt-1">Signatures</h1>
         <p className="mt-3 text-ink-soft max-w-2xl">

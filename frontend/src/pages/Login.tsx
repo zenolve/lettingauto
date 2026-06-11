@@ -10,26 +10,34 @@ import { supabase, supabaseEnabled } from "../lib/supabase";
 // Email + password works regardless (Supabase default, no provider setup).
 const OAUTH_ENABLED = import.meta.env.VITE_ENABLE_OAUTH === "true";
 
-/** Sign-in for agency users.
+/** Sign-in for agency users — Editorial Mesh treatment.
  *
- * Supabase mode (VITE_SUPABASE_URL set): email/password + Google + Microsoft.
+ * Supabase mode (VITE_SUPABASE_URL set): email/password (+ optional OAuth).
  * Legacy mode: the single bootstrap account against the backend (dev only).
  */
 export default function Login() {
   return (
-    <div
-      className="min-h-screen grid place-items-center bg-cream-50 p-6"
-      style={{
-        backgroundImage:
-          "radial-gradient(900px 500px at 100% 0%, rgba(201, 162, 76, 0.10), transparent 65%), radial-gradient(700px 400px at 0% 100%, rgba(0, 74, 173, 0.06), transparent 60%)",
-      }}>
-      <div className="w-full max-w-sm rounded-lg bg-white shadow-paper border border-cream-300 overflow-hidden">
-        <div className="bg-navy-700 text-white px-6 py-7 text-center border-b-2 border-gold-500">
-          <div className="mx-auto mb-3 h-12 w-12 rounded-md bg-white text-navy-700 grid place-items-center font-serif font-bold text-lg shadow-sm">LA</div>
-          <h1 className="font-serif font-semibold text-xl tracking-wide">{brand.name}</h1>
-          <p className="text-xs uppercase tracking-kicker text-cream-200 mt-1">{brand.tagline}</p>
+    <div className="min-h-screen bg-mesh-hero grid place-items-center p-6">
+      <div className="w-full max-w-md">
+        {/* Wordmark above the card — quiet, editorial. */}
+        <div className="flex items-center justify-center gap-2.5 mb-7">
+          <LogoMark />
+          <span className="font-serif text-xl font-semibold tracking-tight">{brand.name}</span>
         </div>
-        {supabaseEnabled ? <SupabaseLogin /> : <LegacyLogin />}
+
+        <div className="card rounded-3xl overflow-hidden">
+          <div className="px-8 pt-8 pb-2">
+            <p className="kicker">Agent console</p>
+            <h1 className="font-serif text-[30px] leading-tight font-semibold mt-1.5">
+              Welcome <em>back</em>.
+            </h1>
+          </div>
+          {supabaseEnabled ? <SupabaseLogin /> : <LegacyLogin />}
+        </div>
+
+        <p className="text-center text-xs text-ink-muted mt-6">
+          {brand.tagline} · <span className="whitespace-nowrap">£50 per new tenancy, nothing else</span>
+        </p>
       </div>
     </div>
   );
@@ -79,16 +87,14 @@ function SupabaseLogin() {
   }
 
   return (
-    <div className="p-7 space-y-4">
+    <div className="px-8 pb-8 pt-4 space-y-4">
       {OAUTH_ENABLED && (
         <>
           <div className="grid grid-cols-1 gap-2">
-            <button type="button" onClick={() => oauth("google")}
-              className="flex items-center justify-center gap-2.5 w-full rounded-md border border-cream-400 px-4 py-2.5 text-sm font-medium text-ink hover:bg-cream-100 transition">
+            <button type="button" onClick={() => oauth("google")} className="btn-secondary w-full gap-2.5">
               <GoogleIcon /> Continue with Google
             </button>
-            <button type="button" onClick={() => oauth("azure")}
-              className="flex items-center justify-center gap-2.5 w-full rounded-md border border-cream-400 px-4 py-2.5 text-sm font-medium text-ink hover:bg-cream-100 transition">
+            <button type="button" onClick={() => oauth("azure")} className="btn-secondary w-full gap-2.5">
               <MicrosoftIcon /> Continue with Microsoft
             </button>
           </div>
@@ -111,8 +117,16 @@ function SupabaseLogin() {
             autoComplete={mode === "signup" ? "new-password" : "current-password"}
             value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
         </label>
-        {error && <p className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded px-3 py-2">{error}</p>}
-        {notice && <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">{notice}</p>}
+        {error && (
+          <p role="alert" className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-3.5 py-2.5">
+            {error}
+          </p>
+        )}
+        {notice && (
+          <p role="status" className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-3.5 py-2.5">
+            {notice}
+          </p>
+        )}
         <button className="btn-primary w-full" disabled={loading}>
           {loading ? "Please wait…" : mode === "signup" ? "Create account" : "Sign in"}
         </button>
@@ -120,7 +134,7 @@ function SupabaseLogin() {
 
       <p className="text-center text-sm text-ink-muted">
         {mode === "signup" ? "Already have an account?" : "New to the platform?"}{" "}
-        <button type="button" className="text-navy-700 font-medium hover:underline"
+        <button type="button" className="font-medium text-ink underline underline-offset-4 hover:text-ink-soft"
           onClick={() => { setMode(mode === "signup" ? "signin" : "signup"); setError(null); setNotice(null); }}>
           {mode === "signup" ? "Sign in" : "Create an account"}
         </button>
@@ -153,8 +167,8 @@ function LegacyLogin() {
   }
 
   return (
-    <form className="p-7 space-y-4" onSubmit={submit}>
-      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+    <form className="px-8 pb-8 pt-4 space-y-4" onSubmit={submit}>
+      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3.5 py-2.5">
         Dev mode — Supabase auth not configured (set VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).
       </p>
       <label className="block">
@@ -167,11 +181,26 @@ function LegacyLogin() {
         <input className="input" type="password" autoComplete="current-password"
           value={password} onChange={(e) => setPassword(e.target.value)} required />
       </label>
-      {error && <p className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded px-3 py-2">{error}</p>}
+      {error && (
+        <p role="alert" className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-3.5 py-2.5">
+          {error}
+        </p>
+      )}
       <button className="btn-primary w-full" disabled={loading}>
         {loading ? "Signing in…" : "Sign in"}
       </button>
     </form>
+  );
+}
+
+function LogoMark() {
+  // Hand-drawn-feeling ink tile with a butter corner — the platform mark.
+  return (
+    <div aria-hidden
+      className="h-9 w-9 grid place-items-center bg-ink text-cream-50 font-serif text-sm font-semibold shadow-paper"
+      style={{ borderRadius: "38% 62% 55% 45% / 45% 42% 58% 55%" }}>
+      LA
+    </div>
   );
 }
 

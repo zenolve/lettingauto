@@ -1,62 +1,82 @@
 /** @type {import('tailwindcss').Config} */
+// Design language: "Editorial Mesh" (landing variation F) — warm paper, ink
+// type, Fraunces serif display with italic accents, pastel mesh gradients,
+// ink pill buttons, hairline rules. Tokens are SEMANTIC: pages reference
+// cream/navy/gold/ink names, so the whole app restyles from here.
 export default {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
       colors: {
-        // Cream "paper" palette — the new base background and card surface.
+        // Warm paper — page background and surfaces.
         cream: {
-          50: "#fdfaf3",  // page background
-          100: "#faf7f2", // alt surface
-          200: "#f5efe5", // hover / muted
-          300: "#e9e2d4", // hairline (subtle)
-          400: "#cdc4b2", // hairline (visible)
+          50: "#faf8f4",  // page background (F paper)
+          100: "#f5f1e9", // alt surface
+          200: "#eee8dc", // hover / muted fill
+          300: "#e4dccd", // hairline (subtle)
+          400: "#cbc1ae", // hairline (visible)
         },
-        // Navy — primary brand. Slight desaturation for cream surfaces.
+        // Historically "navy" — now the warm-ink ramp F headlines use.
+        // Existing pages say text-navy-700 / bg-navy-600 etc.; remapping the
+        // values here flips the whole app from blue to editorial ink.
         navy: {
-          50: "#eef3fb",
-          100: "#cfdcf4",
-          200: "#9fb8e8",
-          300: "#6f95dc",
-          400: "#3f72d0",
-          500: "#1d57bc",
-          600: "#004AAD",
-          700: "#003c8c",
-          800: "#002d6a",
-          900: "#001f48",
+          50: "#f3f1ea",
+          100: "#e7e3d8",
+          200: "#cfc8b8",
+          300: "#a49d8c",
+          400: "#76705f",
+          500: "#4a463c",
+          600: "#262419",
+          700: "#1a1a18",
+          800: "#131311",
+          900: "#0c0c0b",
         },
+        // Honey gold — warm accent for underlines, highlights, merge tokens.
         gold: {
-          200: "#ecd9a8",
-          300: "#dcc07e",
-          400: "#cda757",
+          200: "#f0e2bb",
+          300: "#e3cd92",
+          400: "#d4b56a",
           500: "#C9A24C",
-          600: "#a98538",
-          700: "#7e6126",
+          600: "#a07d33",
+          700: "#7a5e24",
         },
         ink: {
-          DEFAULT: "#15171a",
-          soft:    "#3a3f47",
-          muted:   "#7b7f87",
+          DEFAULT: "#1a1a18",
+          soft:    "#4a463d",
+          muted:   "#6f6a60", // 5.5:1 on cream-50 — AA for body text
+        },
+        // F's pastel mesh palette — decorative gradients only, never text.
+        mesh: {
+          peach:    "#ffd9c4",
+          lavender: "#ddd6fe",
+          mint:     "#d1f5e4",
+          butter:   "#fdf3c9",
         },
       },
       fontFamily: {
-        // Body — Inter throughout.
         sans: ["Inter", "system-ui", "Arial", "sans-serif"],
-        // Headings — Fraunces (variable serif, editorial signature).
         serif: ["Fraunces", "Charter", "Iowan Old Style", "Georgia", "serif"],
       },
       fontSize: {
-        // Tighter ramp to make the Fraunces headings sing.
-        "display": ["44px", { lineHeight: "1.05", letterSpacing: "-0.01em" }],
-        "h1":      ["32px", { lineHeight: "1.1",  letterSpacing: "-0.01em" }],
-        "h2":      ["22px", { lineHeight: "1.2",  letterSpacing: "-0.005em" }],
+        display: ["48px", { lineHeight: "1.04", letterSpacing: "-0.015em" }],
+        h1:      ["34px", { lineHeight: "1.08", letterSpacing: "-0.012em" }],
+        h2:      ["23px", { lineHeight: "1.18", letterSpacing: "-0.006em" }],
       },
       letterSpacing: {
         kicker: "0.18em",
       },
+      borderRadius: {
+        // Organic "hand-drawn" radius for decorative cards (F's paper stack).
+        blob: "58% 42% 56% 44% / 48% 55% 45% 52%",
+      },
       boxShadow: {
-        // Soft, paper-y shadow — for hero cards.
-        paper: "0 1px 0 rgba(0,0,0,0.02), 0 8px 24px rgba(20, 15, 5, 0.05)",
+        // Layered warm paper shadow — cards at rest.
+        paper: "0 1px 0 rgba(26,26,24,0.03), 0 6px 18px rgba(63,48,21,0.06)",
+        // Hover lift for interactive cards / the ink pill.
+        lift:  "0 2px 4px rgba(26,26,24,0.06), 0 14px 34px rgba(63,48,21,0.11)",
+      },
+      transitionTimingFunction: {
+        out: "cubic-bezier(0.22, 1, 0.36, 1)", // ease-out-quint — entrances
       },
     },
   },

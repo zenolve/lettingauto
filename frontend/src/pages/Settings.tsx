@@ -56,10 +56,10 @@ export default function Settings() {
 
   return (
     <div className="max-w-3xl space-y-8">
-      <header>
+      <header className="card bg-mesh-corner p-6 md:p-8">
         <div className="kicker">Settings</div>
-        <h1 className="font-serif text-3xl text-navy-700 mt-1">{agency.name}</h1>
-        <p className="text-sm text-ink-muted mt-1">
+        <h1 className="font-serif text-[32px] leading-tight font-semibold mt-1">{agency.name}</h1>
+        <p className="text-sm text-ink-muted mt-1.5">
           Signed in as {agency.membership.email} · role: {agency.membership.role}
         </p>
       </header>

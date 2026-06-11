@@ -99,8 +99,7 @@ export default function PropertyUploads() {
 
   return (
     <div className="space-y-6">
-      <header className="rounded-lg border border-cream-300 bg-white shadow-paper p-6 md:p-8"
-        style={{ backgroundImage: "radial-gradient(600px 250px at 100% 0%, rgba(201, 162, 76, 0.07), transparent 60%)" }}>
+      <header className="card bg-mesh-corner p-6 md:p-8">
         <BackLink to={`/agent/properties/${propertyId}`} label="Property" />
         <div className="kicker mt-2">Document store</div>
         <h1 className="mt-1">Uploads</h1>

@@ -7,9 +7,10 @@ import { api, DashboardData } from "../lib/api";
 // ---------------------------------------------------------------------------
 // Small helpers
 // ---------------------------------------------------------------------------
+// Chart palette — warm editorial: ink lead, honey + muted naturals support.
 const COLORS = {
   emerald: "#059669", amber: "#D97706", rose: "#E11D48",
-  navy: "#1E3A5F", gold: "#C9A24C", slate: "#64748B", sky: "#0EA5E9",
+  navy: "#1a1a18", gold: "#C9A24C", slate: "#8a8475", sky: "#7c93c4",
 };
 
 function fmtGBP(n: number): string {
@@ -190,16 +191,18 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
+      <header className="card bg-mesh-hero p-6 md:p-8 flex flex-wrap items-end justify-between gap-4">
         <div>
           <div className="kicker">Today at {agencyName}</div>
-          <h1 className="!text-h2 mt-1">Dashboard</h1>
-          <p className="text-sm text-ink-muted mt-1">
+          <h1 className="font-serif text-[34px] leading-tight font-semibold mt-1">
+            Your lettings, <em>at a glance</em>.
+          </h1>
+          <p className="text-sm text-ink-muted mt-2">
             {pipeline.total} propert{pipeline.total === 1 ? "y" : "ies"} · {portfolio.active_tenancies} active ·
             managed rent roll {fmtGBP(portfolio.rent_roll_annual)}/yr
           </p>
         </div>
-        <Link to="/agent/properties" className="btn-ghost text-navy-700">View all properties →</Link>
+        <Link to="/agent/properties" className="btn-secondary">View all properties →</Link>
       </header>
 
       {/* ---- ACT NOW ---- */}
