@@ -4,7 +4,8 @@
 > SaaS.** Agencies self-register (Supabase auth: email / Google / Microsoft),
 > pay via Stripe (a one-time £50 per new tenancy), and every
 > document/email carries their own branding. Full setup checklist:
-> **[docs/COMMERCIAL_SETUP.md](docs/COMMERCIAL_SETUP.md)**.
+> **[docs/COMMERCIAL_SETUP.md](docs/COMMERCIAL_SETUP.md)** · business model:
+> **[docs/BUSINESS_MODEL.md](docs/BUSINESS_MODEL.md)**.
 > The `dev*` branches remain the single-tenant Palace Gate product.
 
 A full-stack lettings-workflow platform (originally a replacement for a

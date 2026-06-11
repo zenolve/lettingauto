@@ -114,6 +114,9 @@ via `tailwind.config.js` + `styles.css` primitives (`card`, `btn-primary`,
 
 ## Key docs
 
+- `docs/BUSINESS_MODEL.md` — how the product makes money (£50/tenancy,
+  pay-first), who pays for what, and EVERY surface stating the price (update
+  them together if pricing changes).
 - `docs/COMMERCIAL_SETUP.md` — everything the operator configures (Supabase,
   OAuth providers, Stripe, env vars, first-run walkthrough).
 - `docs/SUPABASE_MIGRATION.md` — how/why the Airtable→Supabase adapter works.
