@@ -127,23 +127,82 @@ def decode_token(token: str) -> dict:
 
 # ---------------------------------------------------------------------------
 # Supabase access-token verification
+#
+# Supabase signs user access tokens one of two ways:
+#   * Asymmetric "JWT signing keys" (ES256 / RS256) — the default for new
+#     projects. Verified against the project's public JWKS; there is no shared
+#     secret. The token header carries the signing-key `kid`.
+#   * Legacy shared secret (HS256) — older projects. Verified with
+#     ``SUPABASE_JWT_SECRET``.
+# We support both: branch on the token header's ``alg``.
 # ---------------------------------------------------------------------------
-def _decode_supabase_token(token: str) -> Optional[dict]:
-    """Return Supabase JWT claims, or None if this isn't a Supabase token.
+import threading as _threading
+import time as _time
 
-    Raises 401 only when the token IS Supabase-shaped but fails verification.
-    """
-    if not settings.supabase_jwt_secret:
+_jwks_lock = _threading.Lock()
+_jwks_cache: dict[str, object] = {"fetched_at": 0.0, "keys": {}}
+_JWKS_TTL = 600.0  # 10 min
+
+
+def _supabase_base_url() -> str | None:
+    """Project base URL for the JWKS endpoint (SUPABASE_URL, falling back to a
+    Supabase-hosted URL derived from the DB connection's project ref)."""
+    if settings.supabase_url:
+        return settings.supabase_url.rstrip("/")
+    # Derive https://<ref>.supabase.co from the pooler DB URL (postgres.<ref>:…)
+    import re
+    m = re.search(r"postgres\.([a-z0-9]+):", settings.supabase_db_url or "")
+    return f"https://{m.group(1)}.supabase.co" if m else None
+
+
+def _supabase_jwk_for_kid(kid: str | None) -> dict | None:
+    if not kid:
         return None
+    base = _supabase_base_url()
+    if not base:
+        return None
+    now = _time.monotonic()
+    with _jwks_lock:
+        keys = _jwks_cache["keys"]  # type: ignore[assignment]
+        fresh = (now - float(_jwks_cache["fetched_at"])) < _JWKS_TTL  # type: ignore[arg-type]
+        if kid in keys and fresh:  # type: ignore[operator]
+            return keys[kid]  # type: ignore[index]
     try:
-        return jwt.decode(
-            token,
-            settings.supabase_jwt_secret,
-            algorithms=["HS256"],
-            audience="authenticated",
-        )
+        import httpx
+        r = httpx.get(f"{base}/auth/v1/.well-known/jwks.json", timeout=10)
+        r.raise_for_status()
+        fetched = {k["kid"]: k for k in r.json().get("keys", []) if k.get("kid")}
+    except Exception as e:  # noqa: BLE001
+        logger.warning("auth.jwks_fetch_failed err=%s", e)
+        return None
+    with _jwks_lock:
+        _jwks_cache["keys"] = fetched
+        _jwks_cache["fetched_at"] = now
+    return fetched.get(kid)
+
+
+def _decode_supabase_token(token: str) -> Optional[dict]:
+    """Return Supabase JWT claims, or None if this isn't a verifiable Supabase
+    token. Supports asymmetric (ES256/RS256, via JWKS) and legacy HS256."""
+    try:
+        header = jwt.get_unverified_header(token)
+    except Exception:  # noqa: BLE001 — not a JWT at all
+        return None
+    alg = header.get("alg")
+    try:
+        if alg == "HS256":
+            if not settings.supabase_jwt_secret:
+                return None
+            return jwt.decode(token, settings.supabase_jwt_secret,
+                              algorithms=["HS256"], audience="authenticated")
+        if alg in ("ES256", "RS256"):
+            jwk = _supabase_jwk_for_kid(header.get("kid"))
+            if not jwk:
+                return None
+            return jwt.decode(token, jwk, algorithms=[alg], audience="authenticated")
     except JWTError:
         return None
+    return None
 
 
 def _supabase_user_from_claims(claims: dict) -> SupabaseUser:
