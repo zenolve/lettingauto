@@ -20,3 +20,6 @@ backend/*.pdf
 # the directory itself via .gitkeep so the static mount has somewhere to point.
 backend/uploads/*
 !backend/uploads/.gitkeep
+
+# Installed agent skills (reproducible via skills-lock.json)
+.agents/
