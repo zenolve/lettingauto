@@ -6,6 +6,10 @@ import { useAuth } from "../lib/auth";
 import { brand } from "../lib/brand";
 import { supabase, supabaseEnabled } from "../lib/supabase";
 
+// Google / Microsoft sign-in buttons are hidden unless VITE_ENABLE_OAUTH=true.
+// Email + password works regardless (Supabase default, no provider setup).
+const OAUTH_ENABLED = import.meta.env.VITE_ENABLE_OAUTH === "true";
+
 /** Sign-in for agency users.
  *
  * Supabase mode (VITE_SUPABASE_URL set): email/password + Google + Microsoft.
@@ -76,20 +80,24 @@ function SupabaseLogin() {
 
   return (
     <div className="p-7 space-y-4">
-      <div className="grid grid-cols-1 gap-2">
-        <button type="button" onClick={() => oauth("google")}
-          className="flex items-center justify-center gap-2.5 w-full rounded-md border border-cream-400 px-4 py-2.5 text-sm font-medium text-ink hover:bg-cream-100 transition">
-          <GoogleIcon /> Continue with Google
-        </button>
-        <button type="button" onClick={() => oauth("azure")}
-          className="flex items-center justify-center gap-2.5 w-full rounded-md border border-cream-400 px-4 py-2.5 text-sm font-medium text-ink hover:bg-cream-100 transition">
-          <MicrosoftIcon /> Continue with Microsoft
-        </button>
-      </div>
+      {OAUTH_ENABLED && (
+        <>
+          <div className="grid grid-cols-1 gap-2">
+            <button type="button" onClick={() => oauth("google")}
+              className="flex items-center justify-center gap-2.5 w-full rounded-md border border-cream-400 px-4 py-2.5 text-sm font-medium text-ink hover:bg-cream-100 transition">
+              <GoogleIcon /> Continue with Google
+            </button>
+            <button type="button" onClick={() => oauth("azure")}
+              className="flex items-center justify-center gap-2.5 w-full rounded-md border border-cream-400 px-4 py-2.5 text-sm font-medium text-ink hover:bg-cream-100 transition">
+              <MicrosoftIcon /> Continue with Microsoft
+            </button>
+          </div>
 
-      <div className="flex items-center gap-3 text-xs text-ink-muted">
-        <div className="h-px bg-cream-300 flex-1" /> or with email <div className="h-px bg-cream-300 flex-1" />
-      </div>
+          <div className="flex items-center gap-3 text-xs text-ink-muted">
+            <div className="h-px bg-cream-300 flex-1" /> or with email <div className="h-px bg-cream-300 flex-1" />
+          </div>
+        </>
+      )}
 
       <form className="space-y-4" onSubmit={submit}>
         <label className="block">
