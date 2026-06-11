@@ -43,6 +43,10 @@ async def run_scheduler(batch_size: int = 100) -> dict:
         diary_type = f.get("Diary_Type")
         assigned = f.get("Assigned_To") or settings.admin_email
         template = _DIARY_TYPE_TO_TEMPLATE.get(diary_type, "E11_generic.html")
+        # System job: the batch spans every agency. Process each row under its
+        # own agency's scope so the alert email is branded correctly and the
+        # write stays isolated.
+        scope = at.set_agency_scope(f.get("agency_id"))
         try:
             html = render(template, diary=f)
             await send_email(
@@ -58,4 +62,18 @@ async def run_scheduler(batch_size: int = 100) -> dict:
         except Exception as e:  # noqa: BLE001
             logger.warning("diary.fire_failed type=%s err=%s", diary_type, e)
             skipped += 1
-    return {"fired": fired, "skipped": skipped, "checked": len(rows)}
+        finally:
+            at.reset_agency_scope(scope)
+
+    # Daily billing reconciliation: keep every agency's GBP 5/month
+    # live-tenancy subscription quantity in step with reality (gate hooks
+    # update it too; this catches anything missed).
+    billing_synced = 0
+    try:
+        from app.services import billing  # noqa: PLC0415 - avoid load cycle
+        billing_synced = await billing.sync_all_agencies()
+    except Exception as e:  # noqa: BLE001
+        logger.warning("scheduler.billing_sync_failed err=%s", e)
+
+    return {"fired": fired, "skipped": skipped, "checked": len(rows),
+            "billing_synced": billing_synced}

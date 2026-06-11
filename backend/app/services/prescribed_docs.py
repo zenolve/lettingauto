@@ -1,6 +1,6 @@
 """Prescribed-document PDF generation for the tenant pack.
 
-The master Palace Gate doc is emphatic that prescribed documents MUST be sent
+The master compliance doc is emphatic that prescribed documents MUST be sent
 as PDF attachments, not as links — non-service can block possession proceedings
 and (for the RRA Information Sheet) trigger a £7,000 fine per breach.
 
@@ -73,7 +73,8 @@ def _fpdf_fallback(*, title: str, legislation: str, body_html: str, property_add
     pdf.set_text_color(255, 255, 255)
     pdf.set_font("Helvetica", "B", 11)
     pdf.set_xy(15, 5)
-    pdf.cell(0, 6, "PRESCRIBED DOCUMENT - SERVED VIA PALACE GATE", ln=1)
+    from app.core.branding import get_brand  # local import — agency-branded header
+    pdf.cell(0, 6, _ascii_safe(f"PRESCRIBED DOCUMENT - SERVED VIA {get_brand().name.upper()}"), ln=1)
     pdf.set_text_color(0, 0, 0)
 
     # Title
@@ -208,20 +209,22 @@ DOC_DEFS: dict[str, DocDef] = {
 # Rendering
 # ---------------------------------------------------------------------------
 def _wrap(title: str, legislation: str, body_html: str, *, property_address: str, tenant_name: str | None) -> str:
-    """Wrap a prescribed-doc body in a branded Palace Gate shell."""
+    """Wrap a prescribed-doc body in the serving agency's branded shell."""
+    from app.core.branding import get_brand  # local import — avoid cycles
+    b = get_brand()
     tenant_line = f"<p><strong>Tenant:</strong> {tenant_name}</p>" if tenant_name else ""
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"
         f"<title>{title}</title>"
         "<style>"
-        "  @page { margin: 24mm; @bottom-center { content: 'Palace Gate Lettings — ' counter(page); color: #888; font-size: 9pt; } }"
+        f"  @page {{ margin: 24mm; @bottom-center {{ content: '{b.name} — ' counter(page); color: #888; font-size: 9pt; }} }}"
         "  body { font-family: Georgia, 'Times New Roman', serif; color: #1f2937; font-size: 11pt; line-height: 1.5; }"
-        f"  h1 {{ color: {settings.brand_navy}; border-bottom: 3px solid {settings.brand_gold}; padding-bottom: 8px; margin-bottom: 4px; }}"
+        f"  h1 {{ color: {b.navy}; border-bottom: 3px solid {b.gold}; padding-bottom: 8px; margin-bottom: 4px; }}"
         "  .meta  { color: #6b7280; font-size: 10pt; margin-bottom: 24px; }"
-        f"  .badge {{ display: inline-block; padding: 4px 10px; background: {settings.brand_navy}; color: white; font-size: 10pt; border-radius: 4px; margin-bottom: 16px; }}"
+        f"  .badge {{ display: inline-block; padding: 4px 10px; background: {b.navy}; color: white; font-size: 10pt; border-radius: 4px; margin-bottom: 16px; }}"
         "  em { color: #92400e; background: #fef3c7; padding: 1px 4px; }"
         "</style></head><body>"
-        "<div class='badge'>PRESCRIBED DOCUMENT — SERVED VIA PALACE GATE</div>"
+        f"<div class='badge'>PRESCRIBED DOCUMENT — SERVED VIA {b.name.upper()}</div>"
         f"<h1>{title}</h1>"
         f"<div class='meta'>{legislation}</div>"
         f"<p><strong>Property:</strong> {property_address}</p>"

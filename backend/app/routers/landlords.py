@@ -31,6 +31,36 @@ router = APIRouter(prefix="/api/landlords", tags=["landlords"])
 # Allowlisted Landlords columns the agent can edit from the UI. Same shape
 # as properties.py:PATCHABLE_FLAGS plus ``single_select`` with options.
 PATCHABLE_LANDLORD_FLAGS: dict[str, dict[str, Any]] = {
+    # With Airtable gone this is the canonical editor for landlord records, so
+    # it covers identity / contact / banking / residency, not just AML flags.
+    # --- identity & contact ---
+    "Full Name":      {"type": "text", "label": "Full name"},
+    "Email Address":  {"type": "text", "label": "Email"},
+    "Mobile Number":  {"type": "text", "label": "Mobile"},
+    "Full Address":   {"type": "text", "label": "Address"},
+    "Post Code":      {"type": "text", "label": "Postcode"},
+    "Individual or Company": {
+        "type": "single_select", "label": "Individual or company",
+        "options": ["Individual", "Company"],
+    },
+    "Company Name":       {"type": "text", "label": "Company name"},
+    "Director Name":      {"type": "text", "label": "Director name"},
+    "Company Reg Number": {"type": "text", "label": "Company reg number"},
+    # --- residency / NRL ---
+    "UK_Resident_Status": {
+        "type": "single_select", "label": "Residency",
+        "options": ["Resident", "Non-resident"],
+    },
+    "NRL_Approval_Number": {
+        "type": "text",
+        "label": "NRL approval number (HMRC)",
+    },
+    # --- banking (disbursements) ---
+    "Bank Name":      {"type": "text", "label": "Bank name"},
+    "Sort Code":      {"type": "text", "label": "Sort code"},
+    "Account Name":   {"type": "text", "label": "Account name"},
+    "Account Number": {"type": "text", "label": "Account number"},
+    # --- AML review ---
     "Verification Status": {
         "type": "single_select",
         "label": "Verification status",
@@ -40,10 +70,6 @@ PATCHABLE_LANDLORD_FLAGS: dict[str, dict[str, Any]] = {
         "type": "single_select",
         "label": "ID name match (AML review)",
         "options": ["Pending", "Confirmed", "Mismatch"],
-    },
-    "NRL_Approval_Number": {
-        "type": "text",
-        "label": "NRL approval number (HMRC)",
     },
     # Note: AML_Check_Date is auto-stamped when ID_Name_Match flips off
     # "Pending"; not exposed as a directly-editable field on its own.
@@ -104,8 +130,10 @@ def patch_flags(
 
     try:
         at.update(at.TableNames.LANDLORDS, landlord_id, payload)
+    except KeyError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Landlord not found")
     except Exception as e:  # noqa: BLE001
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Airtable rejected the update: {e}")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Update rejected: {e}")
 
     fresh = at.get(at.TableNames.LANDLORDS, landlord_id).get("fields", {})
     return {

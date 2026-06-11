@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LettingAuto — Variation F (Editorial Mesh)</title>
+<meta name="description" content="LettingAuto automates the entire tenancy workflow for UK letting agencies — compliance gates, branded e-signatures, referencing and Stripe payments. £50 one-time per new tenancy, £5/month per live tenancy.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=Inter:wght@400..700&display=swap" rel="stylesheet">
+<style>
+/* ============ tokens & base ============ */
+:root{
+  --paper:#faf8f4;
+  --card:#fffdf9;
+  --ink:#1a1a18;
+  --ink-soft:#54514a;
+  --ink-faint:#8b867a;
+  --line:#e7e1d3;
+  --peach:#ffd9c4;
+  --lavender:#ddd6fe;
+  --mint:#d1f5e4;
+  --butter:#fdf3c9;
+  --rust:#a85f33;
+  --green:#1e7a4f;
+  --amber:#a4761c;
+  --red:#ab3d24;
+  --serif:'Fraunces',Georgia,'Times New Roman',serif;
+  --sans:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  font-family:var(--sans);
+  background:var(--paper);
+  color:var(--ink);
+  font-size:16px;
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+  overflow-x:clip;
+}
+/* faint paper grain */
+body::after{
+  content:"";position:fixed;inset:0;z-index:95;pointer-events:none;opacity:.045;mix-blend-mode:multiply;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+::selection{background:var(--peach);color:var(--ink)}
+a{color:inherit;text-decoration:none}
+a:focus-visible,button:focus-visible{outline:2px solid var(--ink);outline-offset:3px;border-radius:6px}
+img,svg{display:block}
+.wrap{max-width:1120px;margin:0 auto;padding:0 28px}
+
+h1,h2,h3,.serif{
+  font-family:var(--serif);
+  font-optical-sizing:auto;
+  font-weight:550;
+  letter-spacing:-.015em;
+  line-height:1.08;
+  text-wrap:balance;
+}
+
+/* ============ buttons & links ============ */
+.btn{
+  display:inline-flex;align-items:center;gap:9px;
+  background:var(--ink);color:#fbf9f4;
+  font:500 15px/1 var(--sans);
+  padding:16px 30px;border-radius:999px;border:0;cursor:pointer;
+  box-shadow:0 1px 2px rgba(26,26,24,.25);
+  transition:transform .18s ease,box-shadow .18s ease,background .18s ease;
+}
+.btn:hover{transform:translateY(-2px);box-shadow:0 12px 26px rgba(26,26,24,.18);background:#000}
+.btn.small{padding:11px 21px;font-size:13.5px}
+.textlink{
+  font-weight:500;font-size:15px;
+  text-decoration:underline;text-decoration-thickness:1.5px;
+  text-underline-offset:5px;text-decoration-color:#cdc5b2;
+  transition:text-decoration-color .15s ease;
+}
+.textlink:hover{text-decoration-color:var(--ink)}
+
+/* ============ mesh blobs ============ */
+.blob{position:absolute;border-radius:50%;filter:blur(70px);pointer-events:none;z-index:0;opacity:.62}
+.blob--peach{background:radial-gradient(circle at 38% 36%,var(--peach) 0%,rgba(255,217,196,0) 70%)}
+.blob--lavender{background:radial-gradient(circle at 42% 40%,var(--lavender) 0%,rgba(221,214,254,0) 70%)}
+.blob--mint{background:radial-gradient(circle at 40% 42%,var(--mint) 0%,rgba(209,245,228,0) 70%)}
+.blob--butter{background:radial-gradient(circle at 40% 38%,var(--butter) 0%,rgba(253,243,201,0) 70%)}
+
+/* ============ nav ============ */
+.nav{
+  position:sticky;top:0;z-index:60;
+  background:rgba(250,248,244,.82);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border-bottom:1px solid rgba(231,225,211,.85);
+}
+.nav-inner{display:flex;align-items:center;justify-content:space-between;height:68px;gap:24px}
+.wordmark{font-family:var(--serif);font-optical-sizing:auto;font-weight:600;font-size:22px;letter-spacing:-.01em;line-height:1}
+.wordmark b{color:var(--rust);font-weight:600}
+.nav-links{display:flex;gap:32px;font-size:14.5px;font-weight:500;color:var(--ink-soft)}
+.nav-links a{transition:color .15s ease}
+.nav-links a:hover{color:var(--ink)}
+
+/* ============ hero ============ */
+.hero{position:relative;padding:92px 0 84px}
+.hero .b1{width:580px;height:580px;right:-150px;top:-160px}
+.hero .b2{width:470px;height:470px;right:24%;top:170px}
+.hero .b3{width:480px;height:480px;left:-200px;bottom:-180px;opacity:.5}
+.hero .b4{width:420px;height:420px;left:30%;top:-150px;opacity:.5}
+.hero .wrap{position:relative;z-index:1;display:grid;grid-template-columns:1.04fr .96fr;gap:60px;align-items:center}
+
+.kicker{
+  font-size:12px;font-weight:600;letter-spacing:.2em;text-transform:uppercase;
+  color:var(--rust);display:flex;align-items:center;gap:11px;
+}
+.kicker::before{content:"";width:24px;height:2px;background:var(--rust);opacity:.55;border-radius:2px}
+.kicker.center{justify-content:center}
+.kicker.center::before{display:none}
+
+h1{font-size:clamp(2.7rem,5.3vw,4.5rem);margin:24px 0 22px}
+.accent{
+  font-style:italic;font-weight:520;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 110 10' preserveAspectRatio='none'%3E%3Cpath d='M3 7 C 28 2.5, 58 9, 107 4.5' fill='none' stroke='%23e89a6e' stroke-width='3.4' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat 50% 100%/100% .14em;
+  padding-bottom:.1em;
+}
+.hero-sub{font-size:17.5px;color:var(--ink-soft);max-width:52ch;line-height:1.66}
+.hero-cta{display:flex;align-items:center;gap:28px;margin-top:36px;flex-wrap:wrap}
+.hero-meta{display:flex;flex-wrap:wrap;gap:10px 24px;margin-top:42px;font-size:13px;color:var(--ink-faint);font-weight:500}
+.hero-meta span{display:inline-flex;align-items:center;gap:7px}
+.hero-meta .tick{color:var(--green);font-weight:700;font-size:12px}
+
+/* --- paper-card illustration --- */
+.paper-stack{position:relative;height:496px;z-index:1}
+.paper{
+  position:absolute;width:min(396px,92%);
+  background:var(--card);
+  border:1px solid #ece4d4;
+  padding:22px 26px 22px;
+  box-shadow:0 18px 42px rgba(26,26,24,.09),0 3px 10px rgba(26,26,24,.05);
+}
+.paper-1{top:4px;left:11%;transform:rotate(-2.6deg);z-index:3;border-radius:22px 13px 26px 12px/13px 26px 12px 23px}
+.paper-2{top:176px;left:1%;transform:rotate(1.7deg);z-index:2;border-radius:13px 24px 12px 26px/24px 12px 26px 13px}
+.paper-3{top:348px;left:15%;transform:rotate(-1.3deg);z-index:1;border-radius:24px 12px 22px 15px/12px 24px 14px 26px}
+.tape{
+  position:absolute;top:-11px;left:50%;width:78px;height:21px;
+  transform:translateX(-50%) rotate(-4deg);
+  background:rgba(252,233,168,.62);
+  border:1px solid rgba(180,150,70,.16);
+  border-radius:2px;
+}
+.paper-head{display:flex;align-items:center;gap:13px}
+.p-icon{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;flex:none}
+.p-icon.mint{background:#e1f3e9;color:var(--green)}
+.p-icon.butter{background:#f9efcd;color:var(--amber)}
+.p-icon.lav{background:#e8e3fa;color:#5a4a96}
+.paper h4{font-family:var(--serif);font-optical-sizing:auto;font-weight:600;font-size:19px;letter-spacing:-.01em;line-height:1.2}
+.p-status{font-size:13px;font-weight:500;margin-top:3px}
+.p-status.ok{color:var(--green)}
+.p-status.warn{color:var(--amber)}
+.p-lines{margin-top:15px}
+.p-lines i{display:block;height:6px;border-radius:3px;background:#efe9db;margin:8px 0}
+.sig-strip{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin-top:13px;padding-top:11px;border-top:1px dashed #e4dcc8}
+.sig-strip small{font-size:10.5px;color:var(--ink-faint);text-align:right;line-height:1.5}
+.meter{height:6px;border-radius:3px;background:#f0e9d8;margin-top:15px;overflow:hidden}
+.meter i{display:block;height:100%;width:66%;background:#e4b65a;border-radius:3px}
+.meter-meta{display:flex;justify-content:space-between;font-size:10.5px;color:var(--ink-faint);margin-top:7px}
+.badge-tds{
+  display:inline-flex;align-items:center;gap:6px;margin-top:14px;
+  font-size:10.5px;font-weight:600;letter-spacing:.09em;
+  border:1px solid #cde2d5;color:var(--green);background:#edf6f0;
+  padding:5px 11px;border-radius:999px;
+}
+.spark{position:absolute;font-family:var(--serif);pointer-events:none;line-height:1}
+.sp-1{top:-30px;right:5%;font-size:27px;color:#e0915f;transform:rotate(14deg);opacity:.85}
+.sp-2{bottom:-2px;left:-6px;font-size:17px;color:#8d7fc9;transform:rotate(-8deg);opacity:.8}
+.sp-3{top:150px;right:-14px;font-size:13px;color:#54b288;opacity:.8}
+
+/* ============ stages band ============ */
+.stages{
+  border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+  background:rgba(255,253,249,.55);
+  padding:17px 28px;
+  display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:8px 15px;
+  font-size:11.5px;font-weight:500;letter-spacing:.15em;text-transform:uppercase;color:var(--ink-faint);
+}
+.stages .arrow{color:var(--rust);letter-spacing:0;font-size:13px;opacity:.65}
+
+/* ============ features ============ */
+#product{padding:30px 0 30px;scroll-margin-top:78px}
+.sec-head{max-width:660px;margin:0 auto;text-align:center;padding:74px 0 26px}
+.sec-head h2{font-size:clamp(2rem,3.5vw,2.95rem);margin:20px 0 16px}
+.sec-head p{color:var(--ink-soft);font-size:16.5px}
+
+.feature{display:grid;grid-template-columns:1fr 1fr;gap:68px;align-items:center;padding:58px 0}
+.feature.rev .f-text{order:2}
+.feature h3{font-size:clamp(1.65rem,2.7vw,2.2rem);margin:16px 0 18px}
+.feature .body{color:var(--ink-soft);font-size:16.5px;max-width:46ch;line-height:1.68}
+
+.mock-stage{
+  position:relative;border-radius:32px;
+  min-height:380px;padding:48px 34px;
+  display:flex;align-items:center;justify-content:center;
+}
+.tint-mint{background:radial-gradient(120% 140% at 18% 10%,rgba(209,245,228,.85),rgba(209,245,228,0) 62%),radial-gradient(130% 140% at 88% 92%,rgba(253,243,201,.7),rgba(253,243,201,0) 60%)}
+.tint-lav{background:radial-gradient(120% 140% at 82% 8%,rgba(221,214,254,.75),rgba(221,214,254,0) 62%),radial-gradient(130% 140% at 12% 90%,rgba(255,217,196,.65),rgba(255,217,196,0) 60%)}
+.tint-butter{background:radial-gradient(120% 140% at 20% 90%,rgba(253,243,201,.85),rgba(253,243,201,0) 62%),radial-gradient(130% 140% at 85% 12%,rgba(209,245,228,.6),rgba(209,245,228,0) 60%)}
+
+.mock{
+  background:var(--card);
+  border:1px solid #ece4d4;
+  box-shadow:0 16px 38px rgba(26,26,24,.08),0 2px 8px rgba(26,26,24,.04);
+  padding:26px 28px;
+  width:min(432px,100%);
+}
+.wob-a{border-radius:20px 28px 18px 30px/28px 18px 30px 20px;transform:rotate(-1.2deg)}
+.wob-b{border-radius:28px 18px 30px 20px/18px 28px 20px 30px;transform:rotate(1.3deg)}
+.wob-c{border-radius:24px 32px 20px 26px/30px 20px 28px 22px;transform:rotate(-1deg)}
+
+.mock-eyebrow{display:flex;justify-content:space-between;gap:12px;font-size:10.5px;font-weight:600;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-faint)}
+.mock-eyebrow .alert{color:var(--red)}
+.mock-note{margin-top:19px;font-family:var(--serif);font-optical-sizing:auto;font-style:italic;font-weight:480;font-size:14.5px;color:var(--ink-soft);line-height:1.5}
+
+/* pipeline mock */
+.dots{display:flex;align-items:center;margin:30px 0 10px}
+.dot{width:13px;height:13px;border-radius:50%;border:1.5px solid var(--ink);flex:none}
+.dot.done{background:var(--ink)}
+.dot.todo{border-color:#c9c1ae}
+.seg{height:1.5px;background:#d9d2bf;flex:1;min-width:7px}
+.seg.done{background:var(--ink)}
+.gate{
+  flex:none;width:30px;height:38px;margin:0 3px;
+  border:1.5px solid var(--red);border-radius:10px;
+  background:#fdf0eb;color:var(--red);
+  display:grid;place-items:center;font-size:15px;font-weight:700;
+}
+.dot-labels{position:relative;height:17px;font-size:10px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-faint)}
+.dl-a{position:absolute;left:0}
+.dl-b{position:absolute;left:66%;transform:translateX(-50%);color:var(--red)}
+.dl-c{position:absolute;right:0}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}
+.chip{font-size:12.5px;font-weight:500;padding:6px 13px;border-radius:999px}
+.chip.ok{background:#e3f2e9;color:#1a5e3d}
+.chip.bad{background:#f9e8e2;color:#9c3a20}
+
+/* contract mock */
+.doc{border:1px solid #e7dfcf;border-radius:11px;overflow:hidden;background:#fff;box-shadow:0 6px 16px rgba(26,26,24,.05)}
+.doc-bar{background:#0d5c52;color:#f6f3ec;display:flex;align-items:center;gap:9px;padding:11px 15px;font-size:12.5px;font-weight:600;letter-spacing:.04em}
+.doc-bar i{width:15px;height:15px;border-radius:50%;background:var(--peach);flex:none}
+.doc-body{padding:17px 17px 15px}
+.doc-title{font-family:var(--serif);font-optical-sizing:auto;font-weight:600;font-size:14.5px;letter-spacing:-.01em;margin-bottom:11px}
+.doc .p-lines{margin-top:0}
+.doc .p-lines i{height:5.5px;margin:7px 0}
+.sig-row{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-top:14px;padding-top:11px;border-top:1px dashed #e3dbc7}
+.sig-row small{font-size:10px;color:var(--ink-faint);text-align:right;line-height:1.5}
+.swatches{display:flex;align-items:center;gap:11px;margin-top:20px}
+.swatches .lab{font-size:10.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);margin-right:3px}
+.sw{width:20px;height:20px;border-radius:50%;flex:none}
+.sw.sel{outline:2px solid var(--ink);outline-offset:3px}
+
+/* receipt mock */
+.receipt{width:min(348px,100%)}
+.r-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;border-bottom:1px dashed #ddd4bf;padding-bottom:13px}
+.r-head b{font-size:11px;font-weight:700;letter-spacing:.22em;color:var(--ink)}
+.r-head span{font-size:11px;color:var(--ink-faint);letter-spacing:.06em}
+.r-addr{font-family:var(--serif);font-optical-sizing:auto;font-weight:550;font-size:16px;letter-spacing:-.01em;margin:14px 0 6px}
+.r-row{display:flex;align-items:baseline;gap:10px;margin:11px 0;font-size:13.5px;color:var(--ink-soft)}
+.r-row .fill{flex:1;border-bottom:1px dotted #cfc6ae;transform:translateY(-3.5px)}
+.r-row b{font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
+.r-row .st{font-size:11px;font-weight:600}
+.r-row .st.ok{color:var(--green)}
+.r-total{display:flex;justify-content:space-between;align-items:baseline;border-top:1px dashed #ddd4bf;margin-top:14px;padding-top:13px;font-size:13.5px;font-weight:600}
+.r-total b{font-family:var(--serif);font-size:19px;font-weight:600;font-variant-numeric:tabular-nums}
+.r-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:16px;font-size:11px;color:var(--ink-faint)}
+
+/* ============ quote band ============ */
+.quote{
+  margin-top:54px;
+  border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+  background:rgba(255,253,249,.5);
+  padding:80px 28px;
+}
+.quote-inner{max-width:880px;margin:0 auto;text-align:center}
+.quote blockquote{
+  font-family:var(--serif);font-optical-sizing:auto;
+  font-style:italic;font-weight:480;
+  font-size:clamp(1.6rem,3.1vw,2.4rem);
+  line-height:1.3;letter-spacing:-.01em;text-wrap:balance;
+}
+.quote cite{display:block;margin-top:26px;font-style:normal;font-size:12.5px;font-weight:500;letter-spacing:.17em;text-transform:uppercase;color:var(--ink-faint)}
+
+/* ============ pricing ============ */
+#pricing{position:relative;padding:112px 0 124px;scroll-margin-top:78px}
+#pricing .b1{width:560px;height:560px;left:-130px;top:60px}
+#pricing .b2{width:600px;height:600px;right:-170px;top:-30px}
+#pricing .b3{width:520px;height:520px;left:32%;bottom:-200px}
+#pricing .b4{width:380px;height:380px;left:14%;top:-110px;opacity:.5}
+#pricing .wrap{position:relative;z-index:1}
+.p-head{max-width:640px;margin:0 auto;text-align:center}
+.p-head h2{font-size:clamp(2.1rem,3.6vw,3rem);margin:20px 0 18px}
+.p-sub{color:var(--ink-soft);font-size:16.5px}
+.p-sub b{font-weight:600;color:var(--ink)}
+
+.price-card{
+  position:relative;max-width:860px;margin:52px auto 0;
+  background:rgba(255,253,249,.9);
+  border:1px solid #eae2d0;
+  border-radius:36px 26px 38px 24px/26px 38px 24px 36px;
+  padding:58px 56px 48px;
+  box-shadow:0 32px 72px rgba(26,26,24,.1),0 4px 14px rgba(26,26,24,.05);
+  backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);
+}
+.duo{display:flex;align-items:stretch}
+.duo .col{flex:1;text-align:center;padding:6px 26px}
+.duo .vr{width:1px;background:var(--line);flex:none}
+.amount{font-family:var(--serif);font-optical-sizing:auto;font-weight:560;font-size:clamp(4rem,8.5vw,5.9rem);line-height:1;letter-spacing:-.02em}
+.per{margin-top:13px;font-size:14.5px;font-weight:600;color:var(--ink)}
+.per-note{margin-top:7px;font-size:13px;color:var(--ink-faint)}
+
+.includes{list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:13px 34px;max-width:600px;margin:42px auto 0;font-size:14.5px;color:var(--ink-soft)}
+.includes li{display:flex;align-items:flex-start;gap:10px}
+.includes .tk{color:var(--green);font-weight:700;flex:none}
+.p-cta{text-align:center;margin-top:40px}
+.smallprint{text-align:center;margin-top:19px;font-size:12.5px;color:var(--ink-faint)}
+
+/* ============ footer ============ */
+footer{border-top:1px solid var(--line);background:rgba(246,242,233,.65);padding:62px 0 44px}
+.f-grid{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;gap:44px}
+.f-brand p{margin-top:14px;font-size:13.5px;color:var(--ink-faint);max-width:30ch;line-height:1.65}
+.f-col h5{font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:15px}
+.f-col a{display:block;font-size:14px;color:var(--ink-soft);padding:5.5px 0;transition:color .15s ease}
+.f-col a:hover{color:var(--ink)}
+.f-bottom{margin-top:52px;padding-top:24px;border-top:1px solid var(--line);display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px 24px;font-size:12.5px;color:var(--ink-faint)}
+
+/* ============ responsive ============ */
+@media (max-width:800px){
+  .nav-links{display:none}
+  .hero{padding:60px 0 64px}
+  .hero .wrap{grid-template-columns:1fr;gap:54px}
+  .hero-sub{font-size:16.5px}
+  .paper-stack{height:470px;max-width:430px;margin:0 auto;width:100%}
+  .paper{width:min(360px,90%)}
+  .paper-1{left:6%}
+  .paper-2{left:0}
+  .paper-3{left:8%}
+  .stages{padding:15px 18px;font-size:10.5px;gap:6px 11px}
+  .sec-head{padding:58px 0 8px}
+  .feature{grid-template-columns:1fr;gap:32px;padding:46px 0}
+  .feature.rev .f-text{order:0}
+  .feature .body{max-width:none}
+  .mock-stage{min-height:0;padding:38px 20px}
+  .quote{padding:64px 22px}
+  #pricing{padding:88px 0 96px}
+  .price-card{padding:44px 26px 40px}
+  .duo{flex-direction:column;gap:34px}
+  .duo .vr{width:62%;height:1px;margin:0 auto}
+  .duo .col{padding:0 6px}
+  .includes{grid-template-columns:1fr;gap:12px;max-width:340px}
+  .f-grid{grid-template-columns:1fr 1fr;gap:36px}
+  .f-brand{grid-column:1/-1}
+}
+</style>
+</head>
+<body id="top">
+
+<!-- ============ nav ============ -->
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a class="wordmark" href="#top">LettingAuto<b>.</b></a>
+    <nav class="nav-links" aria-label="Primary">
+      <a href="#product">Product</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#">Sign in</a>
+    </nav>
+    <a class="btn small" href="#pricing">Book a demo</a>
+  </div>
+</header>
+
+<main>
+
+<!-- ============ hero ============ -->
+<section class="hero">
+  <div class="blob blob--peach b1" aria-hidden="true"></div>
+  <div class="blob blob--lavender b2" aria-hidden="true"></div>
+  <div class="blob blob--mint b3" aria-hidden="true"></div>
+  <div class="blob blob--butter b4" aria-hidden="true"></div>
+
+  <div class="wrap">
+    <div class="hero-text">
+      <p class="kicker">Tenancy automation for UK letting agencies</p>
+      <h1>Lettings admin that runs <em class="accent">itself</em>.</h1>
+      <p class="hero-sub">LettingAuto carries every tenancy through nine stages — take-on, compliance, marketing, offer, referencing, signing, move-in and beyond — and stops anything unlawful at the gate. Your brand on every document; our eyes on every expiry date.</p>
+      <div class="hero-cta">
+        <a class="btn" href="#pricing">Start your first tenancy</a>
+        <a class="textlink" href="#product">See how the pipeline works</a>
+      </div>
+      <div class="hero-meta">
+        <span><i class="tick">✓</i> Renters’ Rights Act 2025 ready</span>
+        <span><i class="tick">✓</i> Google &amp; Microsoft sign-in</span>
+        <span><i class="tick">✓</i> Payments by Stripe</span>
+      </div>
+    </div>
+
+    <div class="paper-stack" aria-hidden="true">
+      <span class="spark sp-1">✦</span>
+      <span class="spark sp-2">✦</span>
+      <span class="spark sp-3">✦</span>
+
+      <article class="paper paper-1">
+        <div class="tape"></div>
+        <div class="paper-head">
+          <span class="p-icon mint">
+            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4"/><path d="M10.5 13.5l1.8 1.8 3.2-3.6"/></svg>
+          </span>
+          <div>
+            <h4>Tenancy agreement</h4>
+            <p class="p-status ok">Signed ✓</p>
+          </div>
+        </div>
+        <div class="p-lines"><i style="width:86%"></i><i style="width:62%"></i></div>
+        <div class="sig-strip">
+          <svg width="112" height="26" viewBox="0 0 112 26" fill="none" aria-hidden="true"><path d="M4 18 C 12 4, 18 22, 26 14 S 40 6, 46 14 S 58 22, 66 12 S 84 6, 92 14 C 96 18, 103 16, 108 12" stroke="#1a1a18" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <small>Signed by both parties<br>4 June 2026, 14:32</small>
+        </div>
+      </article>
+
+      <article class="paper paper-2">
+        <div class="paper-head">
+          <span class="p-icon butter">
+            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c2.5 3 5.5 5.6 5.5 9.4A5.5 5.5 0 0 1 12 18a5.5 5.5 0 0 1-5.5-5.6C6.5 8.6 9.5 6 12 3z"/><path d="M12 21v-3"/></svg>
+          </span>
+          <div>
+            <h4>Gas certificate</h4>
+            <p class="p-status warn">Expires in 8 months</p>
+          </div>
+        </div>
+        <div class="meter"><i></i></div>
+        <div class="meter-meta"><span>Issued Feb 2026</span><span>Renew by Feb 2027 · reminder set</span></div>
+      </article>
+
+      <article class="paper paper-3">
+        <div class="paper-head">
+          <span class="p-icon lav">
+            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 2.8v5.6c0 4.3-2.9 7.3-7 9.6-4.1-2.3-7-5.3-7-9.6V5.8z"/><path d="M9.2 11.8l2 2 3.6-4"/></svg>
+          </span>
+          <div>
+            <h4>Deposit</h4>
+            <p class="p-status ok">Protected with TDS</p>
+          </div>
+        </div>
+        <span class="badge-tds">TDS · CERT 8841-2207</span>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============ stages band ============ -->
+<div class="stages" aria-label="The nine-stage pipeline">
+  <span>Take-on</span><span class="arrow">→</span>
+  <span>Compliance</span><span class="arrow">→</span>
+  <span>Marketing</span><span class="arrow">→</span>
+  <span>Offer</span><span class="arrow">→</span>
+  <span>Referencing</span><span class="arrow">→</span>
+  <span>TA signing</span><span class="arrow">→</span>
+  <span>Move-in</span><span class="arrow">→</span>
+  <span>Live tenancy</span><span class="arrow">→</span>
+  <span>End</span>
+</div>
+
+<!-- ============ features ============ -->
+<section id="product">
+  <div class="wrap">
+
+    <div class="sec-head">
+      <p class="kicker center">What LettingAuto does</p>
+      <h2>One pipeline, nine stages, no gaps.</h2>
+      <p>Every tenancy moves along the same rail, from first instruction to final day. The dull stages run themselves — and the dangerous ones are gated.</p>
+    </div>
+
+    <!-- row 1: compliance gates -->
+    <div class="feature">
+      <div class="f-text">
+        <p class="kicker">Compliance</p>
+        <h3>Gates that make illegal move-ins impossible.</h3>
+        <p class="body">Gas safety, EPC, EICR, How to Rent, deposit protection — every certificate is tracked alongside its expiry date, and the pipeline simply won’t advance past a missing one. When the Renters’ Rights Act 2025 tightens the rules, your gates will already match them.</p>
+      </div>
+      <div class="mock-stage tint-mint">
+        <div class="mock wob-a">
+          <p class="mock-eyebrow"><span>Pipeline · 12 Bramley Rd, Flat 2</span><span class="alert">Stage 6 of 9</span></p>
+          <div class="dots" aria-hidden="true">
+            <span class="dot done"></span><span class="seg done"></span>
+            <span class="dot done"></span><span class="seg done"></span>
+            <span class="dot done"></span><span class="seg done"></span>
+            <span class="dot done"></span><span class="seg done"></span>
+            <span class="dot done"></span><span class="seg done"></span>
+            <span class="dot done"></span><span class="seg done"></span>
+            <span class="gate">✗</span><span class="seg"></span>
+            <span class="dot todo"></span><span class="seg"></span>
+            <span class="dot todo"></span><span class="seg"></span>
+            <span class="dot todo"></span>
+          </div>
+          <div class="dot-labels" aria-hidden="true">
+            <span class="dl-a">Take-on</span>
+            <span class="dl-b">Move-in gate</span>
+            <span class="dl-c">End</span>
+          </div>
+          <div class="chips">
+            <span class="chip ok">Gas safety — on file ✓</span>
+            <span class="chip ok">EPC C — valid to 2031 ✓</span>
+            <span class="chip bad">EICR — expired ✗ · move-in blocked</span>
+          </div>
+          <p class="mock-note">The gate lifts itself the moment a valid certificate is uploaded.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- row 2: branded e-signature -->
+    <div class="feature rev">
+      <div class="f-text">
+        <p class="kicker">E-signature &amp; branding</p>
+        <h3>Contracts that look like you, not us.</h3>
+        <p class="body">Tenancy agreements go out for e-signature under your agency’s name, logo and colours — on web, phone or tablet. Landlord and tenant onboarding forms carry the same look, so the whole journey feels like one firm. Signed copies and audit trails file themselves against the tenancy.</p>
+      </div>
+      <div class="mock-stage tint-lav">
+        <div class="mock wob-b">
+          <div class="doc">
+            <div class="doc-bar"><i></i>Marsh &amp; Maple Lettings</div>
+            <div class="doc-body">
+              <p class="doc-title">Assured Shorthold Tenancy Agreement</p>
+              <div class="p-lines"><i style="width:92%"></i><i style="width:78%"></i><i style="width:85%"></i><i style="width:56%"></i></div>
+              <div class="sig-row">
+                <svg width="96" height="24" viewBox="0 0 96 24" fill="none" aria-hidden="true"><path d="M4 16 C 11 3, 16 20, 24 13 S 37 5, 43 13 S 54 20, 62 11 S 78 6, 84 13 C 87 16, 90 15, 93 11" stroke="#1a1a18" stroke-width="1.5" stroke-linecap="round"/></svg>
+                <small>Signed by tenant<br>on her phone, 19:04</small>
+              </div>
+            </div>
+          </div>
+          <div class="swatches" aria-hidden="true">
+            <span class="lab">Your colours</span>
+            <span class="sw sel" style="background:#0d5c52"></span>
+            <span class="sw" style="background:#5a4a86"></span>
+            <span class="sw" style="background:#b4502f"></span>
+            <span class="sw" style="background:#1f4e79"></span>
+            <span class="sw" style="background:#946b2d"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- row 3: payments & referencing -->
+    <div class="feature">
+      <div class="f-text">
+        <p class="kicker">Payments &amp; referencing</p>
+        <h3>Money and referencing, without the chase.</h3>
+        <p class="body">The moment an offer is agreed, Stripe collects the holding deposit and first month’s rent; referencing runs alongside and the result lands in the timeline. Your team signs in with the Google or Microsoft accounts they already have — no new passwords, nothing to install.</p>
+      </div>
+      <div class="mock-stage tint-butter">
+        <div class="mock receipt wob-c">
+          <div class="r-head"><b>RECEIPT</b><span>LA-2047 · 10 Jun 2026</span></div>
+          <p class="r-addr">12 Bramley Road, Flat 2</p>
+          <div class="r-row"><span>Holding deposit</span><span class="fill"></span><b>£350</b><span class="st ok">Paid ✓</span></div>
+          <div class="r-row"><span>First month’s rent</span><span class="fill"></span><b>£1,475</b><span class="st ok">Paid ✓</span></div>
+          <div class="r-row"><span>Tenancy deposit</span><span class="fill"></span><b>£1,700</b><span class="st ok">TDS ✓</span></div>
+          <div class="r-total"><span>Collected today</span><b>£1,825</b></div>
+          <div class="r-foot">
+            <span>Collected via Stripe · receipt emailed</span>
+            <span class="chip ok" style="font-size:11px;padding:4px 10px">Referencing — passed ✓</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ============ quote ============ -->
+<section class="quote">
+  <div class="quote-inner">
+    <blockquote>“We stopped chasing certificates the week we switched.”</blockquote>
+    <cite>Margaret Ellison — Principal, Ellison &amp; Frey Lettings, York</cite>
+  </div>
+</section>
+
+<!-- ============ pricing ============ -->
+<section id="pricing">
+  <div class="blob blob--lavender b1" aria-hidden="true"></div>
+  <div class="blob blob--peach b2" aria-hidden="true"></div>
+  <div class="blob blob--mint b3" aria-hidden="true"></div>
+  <div class="blob blob--butter b4" aria-hidden="true"></div>
+
+  <div class="wrap">
+    <div class="p-head">
+      <p class="kicker center">Pricing</p>
+      <h2>Simple, usage-based pricing</h2>
+      <p class="p-sub">£50 one-time per new tenancy + £5/month per live tenancy. <b>No seats, no tiers, cancel anytime.</b></p>
+    </div>
+
+    <div class="price-card">
+      <div class="duo">
+        <div class="col">
+          <p class="amount serif">£50</p>
+          <p class="per">one-time · per new tenancy</p>
+          <p class="per-note">covers everything from take-on to move-in</p>
+        </div>
+        <div class="vr" aria-hidden="true"></div>
+        <div class="col">
+          <p class="amount serif">£5</p>
+          <p class="per">per month · per live tenancy</p>
+          <p class="per-note">billing stops the month a tenancy ends</p>
+        </div>
+      </div>
+
+      <ul class="includes">
+        <li><span class="tk">✓</span>Whole team included — never per seat</li>
+        <li><span class="tk">✓</span>Every feature from day one — no tiers</li>
+        <li><span class="tk">✓</span>Branded e-signatures &amp; compliance gates</li>
+        <li><span class="tk">✓</span>Referencing, onboarding forms &amp; Stripe payments</li>
+      </ul>
+
+      <div class="p-cta">
+        <a class="btn" href="#">Start your first tenancy</a>
+      </div>
+      <p class="smallprint">VAT applies · cancel anytime · no onboarding fees</p>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- ============ footer ============ -->
+<footer>
+  <div class="wrap">
+    <div class="f-grid">
+      <div class="f-brand">
+        <span class="wordmark">LettingAuto<b>.</b></span>
+        <p>Tenancy automation for UK letting agencies — from take-on to end of tenancy, with the law built in.</p>
+      </div>
+      <div class="f-col">
+        <h5>Product</h5>
+        <a href="#product">The pipeline</a>
+        <a href="#product">Compliance gates</a>
+        <a href="#product">E-signature contracts</a>
+        <a href="#product">Referencing &amp; payments</a>
+        <a href="#pricing">Pricing</a>
+      </div>
+      <div class="f-col">
+        <h5>Company</h5>
+        <a href="#">About</a>
+        <a href="#">Guides for agencies</a>
+        <a href="#">Changelog</a>
+        <a href="#">Contact</a>
+      </div>
+      <div class="f-col">
+        <h5>Legal</h5>
+        <a href="#">Privacy</a>
+        <a href="#">Terms</a>
+        <a href="#">Data processing</a>
+        <a href="#">Security</a>
+      </div>
+    </div>
+    <div class="f-bottom">
+      <span>© 2026 LettingAuto Ltd · Registered in England &amp; Wales</span>
+      <span>Made for British lettings law — Renters’ Rights Act 2025 included.</span>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

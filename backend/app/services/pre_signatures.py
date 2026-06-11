@@ -17,7 +17,7 @@ Storage layout:
       README.md
 
 Anchors used inside document bodies are slot markers — ``/pg_sig1/`` means
-"first Palace Gate signature spot in this doc", not "this specific person".
+"first agency signature spot in this doc", not "this specific person".
 At send time the agent picks which signatory fills each slot.
 """
 from __future__ import annotations

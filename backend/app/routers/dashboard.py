@@ -79,7 +79,7 @@ def classify_compliance(fields: dict, today: date) -> str:
     if bad:
         return "bad"
 
-    expiring = any(s == "Palace Gate Arranging" for s in statuses)
+    expiring = any(s == "Agency Arranging" for s in statuses)
     for _, status_key, exp_key in _CERTS:
         if fields.get(status_key) == "On File":
             exp = parse_iso_date(fields.get(exp_key))

@@ -119,10 +119,10 @@ type AdminForm = {
 
 // Service-level options match Tally's "Who will manage the property?" answers.
 const SERVICE_OPTIONS = [
-  "Palace Gate Will Manage",
-  "I will Manage but PG collects rent",
+  "Agency Will Manage",
+  "I will Manage but agency collects rent",
   "I will Manage",
-  "Other manages but PG collects rent",
+  "Other manages but agency collects rent",
   "Other",
 ];
 
@@ -133,6 +133,7 @@ export default function LandlordAdmin() {
   const [done, setDone] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [tokenInfo, setTokenInfo] = useState<any>(null);
+  const agencyName = tokenInfo?.agency_name ?? "the agency";
   const [tokenError, setTokenError] = useState<string | null>(null);
 
   // Prefill landlord_email + landlord_full_name from the JWT/landlord
@@ -259,7 +260,7 @@ export default function LandlordAdmin() {
         <Field
           label="Email address"
           required
-          hint="Prefilled from your invitation link. This is the address all communications from Palace Gate will go to.">
+          hint="Prefilled from your invitation link. This is the address all communications from the agency will go to.">
           <input className="input bg-cream-100" readOnly {...register("landlord_email", { required: "Required" })} />
         </Field>
       </Section>
@@ -334,14 +335,14 @@ export default function LandlordAdmin() {
 
         {/* applying_for_nrl = No → offer PG management */}
         {hasTaxExempt === "No" && applyingForNrl === "No" && (
-          <Field label="Do you want Palace Gate to manage the tax-exempt number?">
+          <Field label={`Do you want ${agencyName} to manage the tax-exempt number?`}>
             <select className="input" {...register("pg_manage_nrl")}>
               <option /><option>Yes</option><option>No</option>
             </select>
           </Field>
         )}
 
-        <Field label="Will you appoint Palace Gate to pay tax (additional 2% fee)?">
+        <Field label={`Will you appoint ${agencyName} to pay tax (additional 2% fee)?`}>
           <select className="input" {...register("pg_collect_pay_tax")}>
             <option /><option>Yes</option><option>No</option>
           </select>
@@ -383,7 +384,7 @@ export default function LandlordAdmin() {
           <select className="input" {...register("has_photos")}><option /><option>Yes</option><option>No</option></select>
         </Field>
         {hasPhotos === "No" && (
-          <Field label="Do you authorise Palace Gate to arrange photos/floorplans?">
+          <Field label={`Do you authorise ${agencyName} to arrange photos/floorplans?`}>
             <select className="input" {...register("auth_photos")}><option /><option>Yes</option><option>No</option></select>
           </Field>
         )}
@@ -391,7 +392,7 @@ export default function LandlordAdmin() {
           <select className="input" {...register("has_inventory")}><option /><option>Yes</option><option>No</option></select>
         </Field>
         {hasInventory === "No" && (
-          <Field label="Do you authorise Palace Gate to prepare an inventory?">
+          <Field label={`Do you authorise ${agencyName} to prepare an inventory?`}>
             <select className="input" {...register("auth_inventory")}><option /><option>Yes</option><option>No</option></select>
           </Field>
         )}
@@ -525,7 +526,7 @@ export default function LandlordAdmin() {
           </select>
         </Field>
         {hasGas === "No" && (
-          <Field label="If no, shall Palace Gate arrange the Gas Safety Certificate?">
+          <Field label={`If no, shall ${agencyName} arrange the Gas Safety Certificate?`}>
             <select className="input" {...register("arrange_gas_cert")}><option /><option>Yes</option><option>No</option></select>
           </Field>
         )}
@@ -551,7 +552,7 @@ export default function LandlordAdmin() {
           </select>
         </Field>
         {hasEpc === "No" && (
-          <Field label="If no, do you authorise Palace Gate to prepare the EPC?">
+          <Field label={`If no, do you authorise ${agencyName} to prepare the EPC?`}>
             <select className="input" {...register("arrange_epc")}><option /><option>Yes</option><option>No</option></select>
           </Field>
         )}
@@ -579,7 +580,7 @@ export default function LandlordAdmin() {
           </select>
         </Field>
         {hasEicr === "No" && (
-          <Field label="If no, would you like Palace Gate to arrange the EICR?">
+          <Field label={`If no, would you like ${agencyName} to arrange the EICR?`}>
             <select className="input" {...register("arrange_eicr")}><option /><option>Yes</option><option>No</option></select>
           </Field>
         )}
@@ -613,7 +614,7 @@ export default function LandlordAdmin() {
 
       {/* ============================ Access ============================= */}
       <Section title="Access arrangements">
-        <Field label="Will you supply Palace Gate with a set of keys?">
+        <Field label={`Will you supply ${agencyName} with a set of keys?`}>
           <select className="input" {...register("supply_keys")}><option /><option>Yes</option><option>No</option></select>
         </Field>
         {supplyKeys === "No" && (

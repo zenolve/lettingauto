@@ -38,7 +38,7 @@ def test_expiring_within_30_days():
 
 
 def test_arranging_is_expiring():
-    assert classify_compliance({"EPC_Status": "Palace Gate Arranging"}, TODAY) == "expiring"
+    assert classify_compliance({"EPC_Status": "Agency Arranging"}, TODAY) == "expiring"
 
 
 def test_all_in_date_is_compliant():

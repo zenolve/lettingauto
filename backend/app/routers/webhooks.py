@@ -32,6 +32,17 @@ def _tally_fields(body: dict) -> list[dict]:
     return (body.get("data") or {}).get("fields") or body.get("fields") or []
 
 
+def _scope_to_property(property_id: str):
+    """Scope a legacy webhook request to the property's agency (token for
+    supabase_client.reset_agency_scope). Legacy Tally shells only."""
+    from app.db import supabase_client as at  # noqa: PLC0415
+    try:
+        prop = at.get(at.TableNames.PROPERTIES, property_id)
+        return at.set_agency_scope(prop.get("fields", {}).get("agency_id"))
+    except Exception:
+        return at.set_agency_scope(None)
+
+
 # ---------------------------------------------------------------------------
 # Tally â€” PG_01 take-on
 # ---------------------------------------------------------------------------
@@ -119,7 +130,12 @@ async def webhook_landlord_admin(req: Request) -> dict:
         supply_keys=get_by_label(fields, "supply keys"),
         alternative_access=get_by_label(fields, "alternative access"),
     )
-    return await handle_admin(property_id, payload)
+    from app.db import supabase_client as at  # noqa: PLC0415
+    scope = _scope_to_property(property_id)
+    try:
+        return await handle_admin(property_id, payload)
+    finally:
+        at.reset_agency_scope(scope)
 
 
 # ---------------------------------------------------------------------------
@@ -154,7 +170,12 @@ async def webhook_landlord_verification(req: Request) -> dict:
         purchase_explanation=get_by_label(fields, "purchase explanation"),
         bank_statements_upload=get_by_label(fields, "bank statements upload"),
     )
-    return await handle_verification(property_id, landlord_email, payload)
+    from app.db import supabase_client as at  # noqa: PLC0415
+    scope = _scope_to_property(property_id)
+    try:
+        return await handle_verification(property_id, landlord_email, payload)
+    finally:
+        at.reset_agency_scope(scope)
 
 
 # ---------------------------------------------------------------------------
@@ -187,7 +208,12 @@ async def webhook_offer(req: Request) -> dict:
         guarantor_email=get_by_label(fields, "guarantor email"),
         is_student=(get_by_label(fields, "is student") or "No").lower().startswith("yes"),
     )
-    return await handle_offer(property_id, payload)
+    from app.db import supabase_client as at  # noqa: PLC0415
+    scope = _scope_to_property(property_id)
+    try:
+        return await handle_offer(property_id, payload)
+    finally:
+        at.reset_agency_scope(scope)
 
 
 # ---------------------------------------------------------------------------
@@ -337,7 +363,18 @@ async def webhook_tenant_pack(req: Request) -> dict:
     pid = body.get("property_id")
     if not pid:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "property_id required")
-    return await handle_tenant_pack(pid)
+    # Scope to the property's agency so the compliance / sent-document rows
+    # this writes carry the right agency_id (and emails the right branding).
+    from app.db import supabase_client as at  # noqa: PLC0415
+    try:
+        prop = at.get(at.TableNames.PROPERTIES, pid)
+    except Exception:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Property not found")
+    scope = at.set_agency_scope(prop.get("fields", {}).get("agency_id"))
+    try:
+        return await handle_tenant_pack(pid)
+    finally:
+        at.reset_agency_scope(scope)
 
 
 # ---------------------------------------------------------------------------
@@ -398,6 +435,9 @@ async def webhook_paragon(req: Request) -> dict:
 
     tenant_id = tenant["id"]
     tf = tenant.get("fields", {})
+    # Scope the rest of the handler to the tenant's agency so the gate-log row
+    # the evaluation writes is stamped (and the summary email branded) right.
+    at.set_agency_scope(tf.get("agency_id"))
     recorded = outcome in ("Pass", "Conditional")
     at.update(at.TableNames.TENANTS, tenant_id, {
         "Referencing_Status": outcome,

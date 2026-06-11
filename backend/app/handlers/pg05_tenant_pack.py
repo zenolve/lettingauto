@@ -5,7 +5,7 @@ email to the tenant, persists each served PDF under
 ``uploads/<property_id>/served_<doc_key>/<timestamp>.pdf``, and writes a
 Compliance audit row per document.
 
-Per the master Palace Gate doc: prescribed documents MUST be PDF attachments,
+Per the master compliance doc: prescribed documents MUST be PDF attachments,
 never links â€” non-service blocks possession proceedings and (for the RRA sheet)
 risks a Â£7,000 fine per breach.
 
@@ -103,7 +103,7 @@ async def handle_tenant_pack(property_id: str) -> dict:
 
     # 1. Build the attachment set for the pack.
     # For gas_cert / epc / eicr, prefer the landlord's actual uploaded PDF
-    # (mandated by the master Palace Gate doc â€” placeholder PDFs are NOT
+    # (mandated by the master compliance doc â€” placeholder PDFs are NOT
     # legally valid certs). Fall back to the placeholder only if nothing was
     # uploaded so the pack still goes out with a visible warning to the agent.
     served: list[dict] = []

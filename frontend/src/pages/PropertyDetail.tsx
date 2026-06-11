@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 
 import { BrowseLibrary } from "../components/ui/BrowseLibrary";
 import { useConfirm } from "../components/ui/ConfirmDialog";
+import EntityEditDrawer, { FieldSpec } from "../components/ui/EntityEditDrawer";
 import { FileUploader } from "../components/ui/FileUploader";
 import { PropertyFlags } from "../components/ui/PropertyFlags";
 import { ReferencingPanel } from "../components/ui/ReferencingPanel";
@@ -75,6 +76,8 @@ export default function PropertyDetail() {
 
       <StagePipeline viewing={viewing} current={current} gateStatus={f["Gate Status"]} onSelect={onSelect} />
 
+      <RecordsEditor propertyId={id} data={data} refresh={refresh} />
+
       <ReviewPanel propertyId={id} />
 
       <GateStatusBar
@@ -103,6 +106,90 @@ export default function PropertyDetail() {
 
       <DangerZone propertyId={id} address={f["Address"]} />
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Records editor — direct field-level editing of the property / landlord /
+// tenant records (replaces "go fix it in Airtable"). Field catalogs come from
+// the backend allowlists, so what's editable is defined server-side.
+// ---------------------------------------------------------------------------
+function RecordsEditor({ propertyId, data, refresh }: { propertyId: string; data: PD; refresh: () => void }) {
+  type Kind = "property" | "landlord" | "tenant";
+  const [which, setWhich] = useState<Kind | null>(null);
+  const [catalog, setCatalog] = useState<FieldSpec[]>([]);
+  const [err, setErr] = useState<string | null>(null);
+
+  const landlord = data.landlords?.[0];
+  const tenant = data.tenant;
+
+  async function open(kind: Kind) {
+    setErr(null);
+    try {
+      if (kind === "property") {
+        const r = await api.get("/api/properties/flags-catalog");
+        // The flags catalog mixes gate toggles + core details; the editor
+        // shows the "details" group (toggles live in the per-stage panels).
+        setCatalog((r.data.fields as FieldSpec[]).filter((x) => x.group === "details"));
+      } else if (kind === "landlord") {
+        const r = await api.get("/api/landlords/flags-catalog");
+        setCatalog(r.data.fields as FieldSpec[]);
+      } else {
+        const r = await api.get("/api/tenants/fields-catalog");
+        setCatalog(r.data.fields as FieldSpec[]);
+      }
+      setWhich(kind);
+    } catch (e: any) {
+      setErr(e?.response?.data?.detail ?? "Could not load the field catalog");
+    }
+  }
+
+  async function save(changed: Record<string, any>) {
+    if (which === "property") await api.patch(`/api/properties/${propertyId}/flags`, changed);
+    else if (which === "landlord" && landlord) await api.patch(`/api/landlords/${landlord.id}/flags`, changed);
+    else if (which === "tenant" && tenant) await api.patch(`/api/tenants/${tenant.id}`, changed);
+    refresh();
+  }
+
+  const values: Record<string, any> =
+    which === "property" ? data.fields
+    : which === "landlord" ? landlord ?? {}
+    : tenant ?? {};
+
+  const titles: Record<Kind, string> = {
+    property: "Edit property details",
+    landlord: `Edit landlord — ${landlord?.["Full Name"] ?? "unnamed"}`,
+    tenant: `Edit tenant — ${tenant?.["Name"] ?? "unnamed"}`,
+  };
+
+  return (
+    <section className="card p-4 flex flex-wrap items-center gap-3 bg-slate-50/60">
+      <span className="text-xs uppercase tracking-wide text-slate-500 mr-1">Edit records</span>
+      <button className="px-3 py-1.5 rounded-md border border-cream-400 text-sm hover:bg-cream-100 transition"
+        onClick={() => open("property")}>
+        Property details
+      </button>
+      <button className="px-3 py-1.5 rounded-md border border-cream-400 text-sm hover:bg-cream-100 transition disabled:opacity-40"
+        disabled={!landlord} title={landlord ? "" : "No landlord linked yet"}
+        onClick={() => open("landlord")}>
+        Landlord
+      </button>
+      <button className="px-3 py-1.5 rounded-md border border-cream-400 text-sm hover:bg-cream-100 transition disabled:opacity-40"
+        disabled={!tenant} title={tenant ? "" : "No tenant linked yet"}
+        onClick={() => open("tenant")}>
+        Tenant
+      </button>
+      {err && <span className="text-xs text-rose-700">{err}</span>}
+      <EntityEditDrawer
+        title={which ? titles[which] : ""}
+        subtitle="Changes save directly to the record. Gate conditions re-read these values."
+        fields={catalog}
+        values={values}
+        open={which !== null}
+        onClose={() => setWhich(null)}
+        onSave={save}
+      />
+    </section>
   );
 }
 
@@ -297,7 +384,7 @@ function Stage3Marketing({ id, data, refresh }: { id: string; data: PD; refresh:
       />
       <Placeholder
         title="Portals checklist"
-        body="Rightmove / Zoopla / LonRes / palacegate.com tick-list. Not yet implemented — see IMPLEMENTATION_STATUS.md step 31."
+        body="Rightmove / Zoopla / LonRes / agency-site tick-list. Not yet implemented — see IMPLEMENTATION_STATUS.md step 31."
       />
       <NextStepCard
         title="Record the first offer"

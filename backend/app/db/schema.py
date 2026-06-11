@@ -56,6 +56,13 @@ class TableSchema:
     computed: dict[str, str] = field(default_factory=dict)  # name -> SELECT subquery ({alias} = base row alias)
 
 
+# Multi-tenancy: every operational table carries an ``agency_id`` column the
+# adapter scopes automatically (see supabase_client.set_agency_scope). It is
+# exposed as a plain field named "agency_id" so system paths (webhooks,
+# billing) can also filter on it explicitly.
+_AGENCY = {"agency_id": Col("agency_id", "uuid")}
+
+
 SCHEMAS: dict[str, TableSchema] = {
     # ------------------------------------------------------------------ stages
     "stages": TableSchema(
@@ -67,10 +74,45 @@ SCHEMAS: dict[str, TableSchema] = {
         },
     ),
 
+    # ---------------------------------------------------------------- agencies
+    "agencies": TableSchema(
+        sql_table="agencies",
+        columns={
+            "name": Col("name"),
+            "slug": Col("slug"),
+            "email": Col("email"),
+            "phone": Col("phone"),
+            "office_address": Col("office_address"),
+            "website": Col("website"),
+            "logo_url": Col("logo_url"),
+            "brand_navy": Col("brand_navy"),
+            "brand_gold": Col("brand_gold"),
+            "onboarding_completed": Col("onboarding_completed", "bool"),
+            "stripe_customer_id": Col("stripe_customer_id"),
+            "stripe_subscription_id": Col("stripe_subscription_id"),
+            "subscription_status": Col("subscription_status"),
+            "payment_method_on_file": Col("payment_method_on_file", "bool"),
+            "billing_email": Col("billing_email"),
+        },
+    ),
+
+    # ------------------------------------------------------------ agency_users
+    "agency_users": TableSchema(
+        sql_table="agency_users",
+        columns={
+            "agency_id": Col("agency_id", "uuid"),
+            "user_id": Col("user_id", "uuid"),
+            "email": Col("email"),
+            "full_name": Col("full_name"),
+            "role": Col("role"),
+        },
+    ),
+
     # -------------------------------------------------------------- properties
     "properties": TableSchema(
         sql_table="properties",
         columns={
+            **_AGENCY,
             "Address": Col("address"),
             "post_code": Col("post_code"),
             "Type": Col("type"),
@@ -155,6 +197,7 @@ SCHEMAS: dict[str, TableSchema] = {
     "landlords": TableSchema(
         sql_table="landlords",
         columns={
+            **_AGENCY,
             "Full Name": Col("full_name"),
             "Email Address": Col("email_address"),
             "Mobile Number": Col("mobile_number"),
@@ -206,6 +249,7 @@ SCHEMAS: dict[str, TableSchema] = {
     "tenants": TableSchema(
         sql_table="tenants",
         columns={
+            **_AGENCY,
             "Name": Col("name"),
             "Tenant Email": Col("tenant_email"),
             "Tenant Address": Col("tenant_address"),
@@ -248,6 +292,7 @@ SCHEMAS: dict[str, TableSchema] = {
     "offers": TableSchema(
         sql_table="offers",
         columns={
+            **_AGENCY,
             "Name": Col("name"),
             "Status": Col("status"),
             "Offered Rent": Col("offered_rent", "number"),
@@ -275,6 +320,7 @@ SCHEMAS: dict[str, TableSchema] = {
     "diary": TableSchema(
         sql_table="diary",
         columns={
+            **_AGENCY,
             "Diary_Type": Col("diary_type"),
             "Diary Date": Col("diary_date", "date"),
             "Alert_Date": Col("alert_date", "date"),
@@ -292,6 +338,7 @@ SCHEMAS: dict[str, TableSchema] = {
     "financials": TableSchema(
         sql_table="financials",
         columns={
+            **_AGENCY,
             "Commission_Rate": Col("commission_rate", "number"),
             "Disbursement_Status": Col("disbursement_status"),
         },
@@ -304,6 +351,7 @@ SCHEMAS: dict[str, TableSchema] = {
     "checklist": TableSchema(
         sql_table="checklist",
         columns={
+            **_AGENCY,
             "Name": Col("name"),
             "Priority": Col("priority"),
             "applies_to": Col("applies_to", "json"),
@@ -321,6 +369,7 @@ SCHEMAS: dict[str, TableSchema] = {
     "submissions": TableSchema(
         sql_table="submissions",
         columns={
+            **_AGENCY,
             "Form Name": Col("form_name"),
             "Submitted Date": Col("submitted_date", "date"),
             "JSON Data": Col("json_data"),
@@ -334,6 +383,7 @@ SCHEMAS: dict[str, TableSchema] = {
     "gate_log": TableSchema(
         sql_table="gate_log",
         columns={
+            **_AGENCY,
             "Attempted_At": Col("attempted_at", "timestamptz"),
             "From_Stage": Col("from_stage"),
             "To_Stage": Col("to_stage"),
@@ -356,6 +406,7 @@ SCHEMAS: dict[str, TableSchema] = {
     "compliance": TableSchema(
         sql_table="compliance",
         columns={
+            **_AGENCY,
             "Document_Type": Col("document_type"),
             "Served_Date": Col("served_date", "date"),
             "Served_To": Col("served_to"),
@@ -373,6 +424,7 @@ SCHEMAS: dict[str, TableSchema] = {
     "sent_documents": TableSchema(
         sql_table="sent_documents",
         columns={
+            **_AGENCY,
             "Name": Col("name"),
             "Doc ID": Col("doc_id"),
             "Doc Name": Col("doc_name"),
@@ -397,6 +449,7 @@ SCHEMAS: dict[str, TableSchema] = {
     "payments": TableSchema(
         sql_table="payments",
         columns={
+            **_AGENCY,
             "property_id": Col("property_id", "uuid"),
             "tenant_id": Col("tenant_id", "uuid"),
             "offer_id": Col("offer_id", "uuid"),
@@ -408,6 +461,7 @@ SCHEMAS: dict[str, TableSchema] = {
             "stripe_checkout_session_id": Col("stripe_checkout_session_id"),
             "stripe_payment_intent_id": Col("stripe_payment_intent_id"),
             "stripe_customer_id": Col("stripe_customer_id"),
+            "stripe_invoice_id": Col("stripe_invoice_id"),
             "metadata": Col("metadata", "json"),
         },
     ),

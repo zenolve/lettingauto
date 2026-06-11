@@ -9,10 +9,15 @@ from typing import Optional
 # Service level (spec §5.2.1)
 # ---------------------------------------------------------------------------
 _SERVICE_LEVEL_MAP = {
+    # Current (agency-neutral) form labels
+    "agency will manage": "Full Management",
+    "i will manage but agency collects rent": "Rent Collection",
+    "other manages but agency collects rent": "Rent Collection",
+    # Legacy labels (pre-commercial forms / old Tally payloads)
     "palace gate will manage": "Full Management",
     "i will manage but pg collects rent": "Rent Collection",
-    "i will manage": "Let Only",
     "other manages but pg collects rent": "Rent Collection",
+    "i will manage": "Let Only",
     "other": "Let Only",
 }
 
@@ -27,11 +32,11 @@ def derive_service_level(answer: Optional[str]) -> str:
 # Certificate status (spec §5.2.2)
 # ---------------------------------------------------------------------------
 def derive_cert_status(has_cert: Optional[str], arrange: Optional[str]) -> str:
-    """Return one of: 'On File', 'Palace Gate Arranging', 'Not Provided'."""
+    """Return one of: 'On File', 'Agency Arranging', 'Not Provided'."""
     if has_cert and has_cert.lower().startswith("yes"):
         return "On File"
     if arrange and arrange.lower().startswith("yes"):
-        return "Palace Gate Arranging"
+        return "Agency Arranging"
     return "Not Provided"
 
 

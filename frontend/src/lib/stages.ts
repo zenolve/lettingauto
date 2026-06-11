@@ -89,7 +89,7 @@ export function deriveCurrentStage(property: PropertyDetail): number {
 
   // Marketing — all three compliance certs at least flagged
   const certsOk = ["Gas_Cert_Status", "EPC_Status", "EICR_Status"].every(
-    (k) => f[k] === "On File" || f[k] === "Palace Gate Arranging",
+    (k) => f[k] === "On File" || f[k] === "Agency Arranging",
   );
   if (certsOk) {
     return 3;

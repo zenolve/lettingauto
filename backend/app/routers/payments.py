@@ -184,16 +184,33 @@ async def stripe_webhook(
     etype = event.get("type", "")
     obj = (event.get("data") or {}).get("object") or {}
 
+    from app.services import billing  # noqa: PLC0415 — avoid load cycle
+
     handled = False
     if etype == "checkout.session.completed":
-        payment = _find_payment(session_id=obj.get("id"))
-        if payment:
-            at.update(at.TableNames.PAYMENTS, payment["id"], {
-                "status": "succeeded" if obj.get("payment_status") == "paid" else "processing",
-                "stripe_payment_intent_id": obj.get("payment_intent"),
-                "stripe_customer_id": obj.get("customer"),
-            })
-            handled = True
+        if obj.get("mode") == "setup":
+            # Agency added a card (Settings → Billing): set it as the default
+            # payment method and start the £5/live-tenancy subscription.
+            try:
+                billing.handle_setup_completed(obj)
+                handled = True
+            except Exception as e:  # noqa: BLE001
+                logger.error("stripe.setup_completed_failed err=%s", e)
+        else:
+            payment = _find_payment(session_id=obj.get("id"))
+            if payment:
+                at.update(at.TableNames.PAYMENTS, payment["id"], {
+                    "status": "succeeded" if obj.get("payment_status") == "paid" else "processing",
+                    "stripe_payment_intent_id": obj.get("payment_intent"),
+                    "stripe_customer_id": obj.get("customer"),
+                })
+                handled = True
+    elif etype in ("customer.subscription.updated", "customer.subscription.created"):
+        handled = billing.apply_subscription_status(obj.get("customer"), obj.get("status", "active"))
+    elif etype == "customer.subscription.deleted":
+        handled = billing.apply_subscription_status(obj.get("customer"), "canceled")
+    elif etype == "invoice.payment_failed":
+        handled = billing.apply_subscription_status(obj.get("customer"), "past_due")
     elif etype == "checkout.session.expired":
         payment = _find_payment(session_id=obj.get("id"))
         if payment:

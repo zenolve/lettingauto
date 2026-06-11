@@ -18,5 +18,5 @@
     a tenant of an Assured Periodic Tenancy. Please read it carefully.
   </p>
   {% endif %}
-  <p>If anything is unclear, please contact us at management@palacegate.com or 020 7581 1631.</p>
+  <p>If anything is unclear, please contact us at {{ agency_email }}{% if agency_phone %} or {{ agency_phone }}{% endif %}.</p>
 {% endblock %}

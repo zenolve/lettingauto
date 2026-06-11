@@ -37,7 +37,17 @@ async def submit_property_takeon(
     payload: PropertyTakeonInput,
     _: Agent = Depends(require_agent),
 ) -> dict:
-    return await handle_takeon(payload)
+    from app.services.billing import BillingError  # noqa: PLC0415
+    try:
+        return await handle_takeon(payload)
+    except BillingError as e:
+        # The £50 new-tenancy fee could not be charged — surface as Payment
+        # Required with a machine-readable code so the UI can route the agent
+        # to Settings → Billing.
+        raise HTTPException(
+            status.HTTP_402_PAYMENT_REQUIRED,
+            detail={"code": e.code, "message": str(e)},
+        )
 
 
 def _derive_current_stage_for_check(property_id: str) -> int:
@@ -63,7 +73,7 @@ def _derive_current_stage_for_check(property_id: str) -> int:
         return 5
     if f.get("TC_Signed"):
         return 4
-    certs_ok = all(f.get(k) in ("On File", "Palace Gate Arranging") for k in ("Gas_Cert_Status", "EPC_Status", "EICR_Status"))
+    certs_ok = all(f.get(k) in ("On File", "Agency Arranging") for k in ("Gas_Cert_Status", "EPC_Status", "EICR_Status"))
     if certs_ok:
         return 3
     if bool(f.get("Landlords")) and any(f.get(k) for k in ("Gas_Cert_Status", "EPC_Status", "EICR_Status")):
@@ -183,7 +193,15 @@ async def submit_landlord_admin(
     token: str = Query(...),
 ) -> dict:
     tok = decode_form_token(token, expected_form="landlord_admin")
-    return await handle_admin(tok.property_id, payload)
+    # Scope the request to the agency stamped into the form token so every
+    # row this public submission writes lands in (and reads from) the right
+    # agency's data.
+    from app.db import supabase_client as at  # noqa: PLC0415
+    scope = at.set_agency_scope(tok.agency_id)
+    try:
+        return await handle_admin(tok.property_id, payload)
+    finally:
+        at.reset_agency_scope(scope)
 
 
 @router.post("/landlord-verification", status_code=status.HTTP_201_CREATED)
@@ -192,4 +210,9 @@ async def submit_landlord_verification(
     token: str = Query(...),
 ) -> dict:
     tok = decode_form_token(token, expected_form="landlord_verification")
-    return await handle_verification(tok.property_id, tok.email, payload)
+    from app.db import supabase_client as at  # noqa: PLC0415
+    scope = at.set_agency_scope(tok.agency_id)
+    try:
+        return await handle_verification(tok.property_id, tok.email, payload)
+    finally:
+        at.reset_agency_scope(scope)

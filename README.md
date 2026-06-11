@@ -1,18 +1,24 @@
-# Palace Gate Lettings — PropTech System
+# LettingAuto — lettings workflow automation for agencies
 
-A full-stack replacement for the Tally + n8n + Airtable pipeline described in
-`PalaceGate_FastAPI_Specification`. Tally has been retired — all four onboarding
-forms are now served by the internal React + FastAPI form feature and no Tally
-API keys or signing secrets are required. This bundle contains:
+> **This branch (`supabase-stripe-integration`) is the commercial multi-agency
+> SaaS.** Agencies self-register (Supabase auth: email / Google / Microsoft),
+> pay via Stripe (£50 per new tenancy + £5/month per live tenancy), and every
+> document/email carries their own branding. Full setup checklist:
+> **[docs/COMMERCIAL_SETUP.md](docs/COMMERCIAL_SETUP.md)**.
+> The `dev*` branches remain the single-tenant Palace Gate product.
 
-- **`backend/`** — FastAPI service (Python 3.11+). Replaces n8n. The canonical
-  form ingress is the JSON API at `/api/forms/*`; the legacy Tally webhook
-  routes are kept as inert shells but no longer expect a signing secret.
-- **`frontend/`** — React 18 + Vite + Tailwind. Internal branded versions of all
-  four forms, an agent dashboard, a property pipeline view, and a Tiptap-based
-  contract editor that renders to PDF and pushes to DocuSeal for signature.
+A full-stack lettings-workflow platform (originally a replacement for a
+Tally + n8n + Airtable pipeline). This bundle contains:
 
-> **Brand:** Palace Gate navy `#004AAD` with a warm gold accent `#C9A24C`.
+- **`backend/`** — FastAPI service (Python 3.11+) over Supabase/Postgres. The
+  canonical form ingress is the JSON API at `/api/forms/*`; the legacy Tally
+  webhook routes are kept as inert shells.
+- **`frontend/`** — React 18 + Vite + Tailwind. Agency onboarding + settings,
+  agent dashboard, property pipeline, entity editors, and a Tiptap-based
+  contract editor that renders to PDF and pushes to e-signature.
+
+> **Platform brand:** LettingAuto navy `#004AAD` / gold `#C9A24C` — overridden
+> per agency at runtime.
 
 ## Quick start
 

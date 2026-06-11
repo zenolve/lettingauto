@@ -280,6 +280,36 @@ PATCHABLE_FLAGS: dict[str, dict[str, Any]] = {
     # --- Text fields (no gate impact, but no other UI today) ---
     "Inventory_Clerk":               {"type": "text",           "label": "Inventory clerk"},
     "Westminster_Licence_Number":    {"type": "text",           "label": "Westminster licence number"},
+    # --- Core property details (post-Airtable, this is the canonical editor) ---
+    "Address":                       {"type": "text",   "label": "Address", "group": "details"},
+    "post_code":                     {"type": "text",   "label": "Postcode", "group": "details"},
+    "landlord_email":                {"type": "text",   "label": "Landlord email", "group": "details"},
+    "Annual Rent ":                  {"type": "number", "label": "Annual rent (£)", "group": "details"},
+    "Rent Frequency":                {"type": "single_select", "label": "Rent frequency",
+                                      "options": ["Monthly", "Weekly"], "group": "details"},
+    "Tenancy Type":                  {"type": "single_select", "label": "Tenancy type",
+                                      "options": ["APT", "Common Law"], "group": "details"},
+    "Service Level":                 {"type": "single_select", "label": "Service level",
+                                      "options": ["Full Management", "Rent Collection", "Let Only"],
+                                      "group": "details"},
+    "Property Type":                 {"type": "text",   "label": "Property type", "group": "details"},
+    "Deposit":                       {"type": "number", "label": "Deposit (£)", "group": "details"},
+    "EPC Rating ":                   {"type": "text",   "label": "EPC rating", "group": "details"},
+    "Gas_Cert_Status":               {"type": "single_select", "label": "Gas cert status",
+                                      "options": ["On File", "Agency Arranging", "Not Provided"],
+                                      "group": "details"},
+    "EPC_Status":                    {"type": "single_select", "label": "EPC status",
+                                      "options": ["On File", "Agency Arranging", "Not Provided"],
+                                      "group": "details"},
+    "EICR_Status":                   {"type": "single_select", "label": "EICR status",
+                                      "options": ["On File", "Agency Arranging", "Not Provided"],
+                                      "group": "details"},
+    "Gas Certificates Expiry":       {"type": "date",   "label": "Gas cert expiry", "group": "details"},
+    "EICR Expiry":                   {"type": "date",   "label": "EICR expiry", "group": "details"},
+    "Tenancy Start Date":            {"type": "date",   "label": "Tenancy start", "group": "details"},
+    "Tenancy Expiry Date":           {"type": "date",   "label": "Tenancy expiry", "group": "details"},
+    "Checkin_Date":                  {"type": "date",   "label": "Check-in date", "group": "details"},
+    "Checkout_Date":                 {"type": "date",   "label": "Check-out date", "group": "details"},
 }
 
 
@@ -342,13 +372,33 @@ def patch_flags(
             payload[meta["date_field"]] = today if checked else None
         elif t == "text":
             payload[k] = "" if raw is None else str(raw)
+        elif t == "number":
+            if raw is None or raw == "":
+                payload[k] = None
+            else:
+                try:
+                    payload[k] = float(raw)
+                except (TypeError, ValueError):
+                    raise HTTPException(status.HTTP_400_BAD_REQUEST, f"{k}: expected a number")
+        elif t == "date":
+            payload[k] = None if raw in (None, "") else str(raw)
+        elif t == "single_select":
+            val = ("" if raw is None else str(raw)).strip()
+            if val and val not in meta["options"]:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    f"{k}: {val!r} not in allowed options {meta['options']}",
+                )
+            payload[k] = val or None
         else:  # pragma: no cover â€” defensive, registry is internal
             raise HTTPException(500, f"Unknown field type {t!r} for {k}")
 
     try:
         at.update(at.TableNames.PROPERTIES, property_id, payload)
+    except KeyError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Property not found")
     except Exception as e:  # noqa: BLE001
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Airtable rejected the update: {e}")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Update rejected: {e}")
 
     # Re-read so the client sees Airtable's normalised values (e.g. a
     # boolean field returns False as the literal key being absent).
@@ -502,7 +552,7 @@ def _derive_stage_order_from_fields(f: dict) -> int:
     if f.get("TC_Signed"):
         return 4
     cert_keys = ("Gas_Cert_Status", "EPC_Status", "EICR_Status")
-    if all(f.get(k) in ("On File", "Palace Gate Arranging") for k in cert_keys):
+    if all(f.get(k) in ("On File", "Agency Arranging") for k in cert_keys):
         return 3
     if bool(f.get("Landlords")) and any(f.get(k) for k in cert_keys):
         return 2

@@ -64,7 +64,7 @@ def run_checks(*, admin: dict) -> ComplianceReport:
     gas_exp: Optional[date] = admin.get("gas_cert_expiry")
     if gas == "Not Provided":
         r.warnings.append("URGENT: No gas certificate. Landlord declined arrangement. Property cannot proceed.")
-    elif gas == "Palace Gate Arranging":
+    elif gas == "Agency Arranging":
         r.actions.append("URGENT: Instruct Gas Safe engineer. Create checklist item.")
     elif gas == "On File":
         d = _days_until(gas_exp)
@@ -80,7 +80,7 @@ def run_checks(*, admin: dict) -> ComplianceReport:
     epc_rating = (admin.get("epc_rating") or "").strip().upper()
     if epc == "Not Provided":
         r.warnings.append("No EPC. Landlord declined arrangement. Legal requirement.")
-    elif epc == "Palace Gate Arranging":
+    elif epc == "Agency Arranging":
         r.actions.append("Instruct accredited EPC assessor. Create checklist item.")
     elif epc == "On File":
         if epc_rating in ("F", "G"):
@@ -93,7 +93,7 @@ def run_checks(*, admin: dict) -> ComplianceReport:
     eicr_exp: Optional[date] = admin.get("eicr_expiry")
     if eicr == "Not Provided":
         r.warnings.append("No EICR. Legal requirement since April 2021.")
-    elif eicr == "Palace Gate Arranging":
+    elif eicr == "Agency Arranging":
         r.actions.append("Instruct NICEIC/NAPIT electrician. Create checklist item.")
     elif eicr == "On File":
         d = _days_until(eicr_exp)

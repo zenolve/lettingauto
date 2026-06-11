@@ -49,7 +49,7 @@ export default function Signatures() {
         <div className="kicker">Document store</div>
         <h1 className="mt-1">Signatures</h1>
         <p className="mt-3 text-ink-soft max-w-2xl">
-          Palace Gate signatures available to bake into documents. Each agent or director gets a registered
+          Agency signatures available to bake into documents. Each agent or director gets a registered
           signature here — when sending a document with one or more <code>/pg_sigN/</code> slots, you pick
           which person fills each slot from a dropdown on the editor.
         </p>
@@ -237,7 +237,7 @@ function DrawPanel({ onCreated, onError }: {
         </label>
         <label className="block">
           <span className="label">Role (optional)</span>
-          <input className="input" value={role} onChange={(e) => setRole(e.target.value)} placeholder="e.g. Director, Palace Gate Lettings" />
+          <input className="input" value={role} onChange={(e) => setRole(e.target.value)} placeholder="e.g. Director" />
         </label>
       </div>
       <div className="relative">
@@ -319,7 +319,7 @@ function UploadPanel({ onCreated, onError }: {
         </label>
         <label className="block">
           <span className="label">Role (optional)</span>
-          <input className="input" value={role} onChange={(e) => setRole(e.target.value)} placeholder="e.g. Director, Palace Gate Lettings" />
+          <input className="input" value={role} onChange={(e) => setRole(e.target.value)} placeholder="e.g. Director" />
         </label>
       </div>
       <label

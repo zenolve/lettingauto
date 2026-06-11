@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LettingAuto — Variation E (Bento Dark)</title>
+<meta name="description" content="LettingAuto runs the entire UK tenancy workflow — nine gated stages, hard compliance checks, agency-branded e-signatures and per-tenancy pricing. £50 per new tenancy, £5 a month while it's live.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#09090b;
+    --panel:#111114;
+    --panel-2:#0d0d10;
+    --ring:#111115;
+    --border:rgba(255,255,255,0.08);
+    --border-strong:rgba(255,255,255,0.14);
+    --text:#f4f4f5;
+    --text-2:#a1a1aa;
+    --text-3:#71717a;
+    --text-4:#52525b;
+    --lime:#a3e635;
+    --lime-soft:#bef264;
+    --violet:#a78bfa;
+    --danger:#f87171;
+    --danger-soft:#fca5a5;
+    --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    font-size:16px;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+    overflow-x:hidden;
+  }
+  ::selection{background:rgba(163,230,53,.28);color:#fafafa}
+  a{color:inherit;text-decoration:none}
+  :focus-visible{outline:2px solid rgba(163,230,53,.75);outline-offset:2px;border-radius:4px}
+  .container{max-width:1120px;margin:0 auto;padding:0 24px}
+  section{scroll-margin-top:84px}
+
+  /* ---------- Buttons ---------- */
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    font-family:var(--sans);font-weight:600;font-size:14px;line-height:1;
+    padding:13px 22px;border-radius:9px;border:1px solid transparent;
+    transition:background .18s ease,box-shadow .18s ease,border-color .18s ease,transform .18s ease;
+    cursor:pointer;white-space:nowrap;
+  }
+  .btn-sm{padding:9px 14px;font-size:13px;border-radius:8px}
+  .btn-primary{
+    background:var(--lime);color:#0a0a0c;border-color:rgba(163,230,53,.45);
+    box-shadow:0 0 22px rgba(163,230,53,.22),inset 0 1px 0 rgba(255,255,255,.4);
+  }
+  .btn-primary:hover{
+    background:#b9f24f;transform:translateY(-1px);
+    box-shadow:0 0 36px rgba(163,230,53,.34),inset 0 1px 0 rgba(255,255,255,.4);
+  }
+  .btn-ghost{background:rgba(255,255,255,.02);border-color:var(--border-strong);color:var(--text)}
+  .btn-ghost:hover{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.24)}
+
+  /* ---------- Kickers / pills ---------- */
+  .kicker{
+    font-family:var(--mono);font-size:11px;font-weight:500;
+    letter-spacing:.16em;text-transform:uppercase;color:var(--lime);
+  }
+  .pill{
+    display:inline-flex;align-items:center;gap:8px;
+    padding:7px 14px;border:1px solid rgba(163,230,53,.22);
+    background:rgba(163,230,53,.05);border-radius:999px;
+    font-family:var(--mono);font-size:10.5px;font-weight:500;
+    letter-spacing:.14em;text-transform:uppercase;color:var(--lime-soft);
+  }
+  .pill .dot{width:6px;height:6px;border-radius:50%;background:var(--lime);box-shadow:0 0 8px rgba(163,230,53,.9);flex-shrink:0}
+
+  /* ---------- Nav ---------- */
+  .nav{
+    position:sticky;top:0;z-index:60;
+    background:rgba(9,9,11,.72);
+    backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    border-bottom:1px solid var(--border);
+  }
+  .nav-in{display:flex;align-items:center;height:60px;gap:12px}
+  .brand{
+    display:flex;align-items:center;
+    font-family:var(--mono);font-size:14.5px;font-weight:600;
+    letter-spacing:-.02em;color:var(--text);
+  }
+  .cursor{
+    display:inline-block;width:7px;height:15px;margin-left:5px;
+    background:var(--lime);box-shadow:0 0 10px rgba(163,230,53,.6);
+    animation:blink 1.3s steps(2,start) infinite;
+  }
+  @keyframes blink{to{visibility:hidden}}
+  .nav-links{display:flex;gap:26px;margin-left:36px;margin-right:auto;font-size:13.5px;font-weight:500;color:var(--text-2)}
+  .nav-links a{transition:color .15s ease}
+  .nav-links a:hover{color:var(--text)}
+  .nav-cta{display:flex;gap:10px;align-items:center;margin-left:auto}
+
+  /* ---------- Hero ---------- */
+  .hero{position:relative;padding:88px 0 110px;text-align:center}
+  .hero::before{
+    content:'';position:absolute;inset:0;pointer-events:none;
+    background-image:
+      linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);
+    background-size:54px 54px;
+    -webkit-mask-image:radial-gradient(58% 52% at 50% 26%,#000 30%,transparent 78%);
+    mask-image:radial-gradient(58% 52% at 50% 26%,#000 30%,transparent 78%);
+  }
+  .hero::after{
+    content:'';position:absolute;left:50%;top:40%;
+    width:min(760px,92vw);height:420px;transform:translateX(-50%);
+    background:radial-gradient(50% 50% at 50% 50%,rgba(163,230,53,.08),transparent 70%);
+    pointer-events:none;
+  }
+  .hero .container{position:relative;z-index:1}
+  .hero h1{
+    font-size:clamp(40px,6.4vw,62px);
+    line-height:1.04;letter-spacing:-.045em;font-weight:600;
+    color:#fafafa;margin:24px auto 18px;max-width:840px;
+    text-wrap:balance;
+  }
+  .hero .sub{
+    font-size:17px;color:var(--text-2);max-width:660px;
+    margin:0 auto 34px;line-height:1.65;text-wrap:balance;
+  }
+  .hero-cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+  .hero-note{
+    margin-top:20px;font-family:var(--mono);font-size:10.5px;
+    letter-spacing:.14em;text-transform:uppercase;color:var(--text-3);
+  }
+
+  /* ---------- Pipeline console ---------- */
+  .console{
+    position:relative;z-index:1;margin:64px auto 0;max-width:1040px;
+    border:1px solid var(--border);border-radius:14px;
+    background:linear-gradient(180deg,#131318,#0d0d10);
+    box-shadow:0 30px 90px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.05);
+    text-align:left;overflow:hidden;
+  }
+  .console-bar{
+    display:flex;align-items:center;gap:14px;padding:13px 18px;
+    border-bottom:1px solid var(--border);background:rgba(255,255,255,.015);
+  }
+  .dots{display:flex;gap:6px;flex-shrink:0}
+  .dots i{width:9px;height:9px;border-radius:50%;background:#26262b;display:block}
+  .console-title{
+    font-family:var(--mono);font-size:11px;color:var(--text-3);
+    letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .console-chip{
+    margin-left:auto;flex-shrink:0;
+    font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.1em;
+    color:var(--danger-soft);border:1px solid rgba(248,113,113,.25);
+    background:rgba(248,113,113,.06);padding:4px 9px;border-radius:6px;
+  }
+  .pl-scroll{overflow-x:auto;padding:30px 26px 24px;scrollbar-width:thin;scrollbar-color:#232328 transparent}
+  .pl-scroll::-webkit-scrollbar{height:6px}
+  .pl-scroll::-webkit-scrollbar-thumb{background:#232328;border-radius:3px}
+  .pl-scroll::-webkit-scrollbar-track{background:transparent}
+  .pl-track{position:relative;display:grid;grid-template-columns:repeat(9,1fr);min-width:860px}
+  .pl-line,.pl-line-done{position:absolute;top:4px;height:2px;border-radius:1px}
+  .pl-line{left:calc(100%/18);right:calc(100%/18);background:rgba(255,255,255,.09)}
+  .pl-line-done{
+    left:calc(100%/18);width:calc(100%/9*5);
+    background:linear-gradient(90deg,rgba(163,230,53,.85),rgba(163,230,53,.35));
+    box-shadow:0 0 12px rgba(163,230,53,.25);
+  }
+  .pl-stage{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:9px;padding:0 4px}
+  .pl-dot{width:9px;height:9px;border-radius:50%;background:#202024;box-shadow:0 0 0 5px var(--ring);flex-shrink:0}
+  .pl-dot.done{background:var(--lime);box-shadow:0 0 0 5px var(--ring),0 0 12px 1px rgba(163,230,53,.65)}
+  .pl-dot.blocked{background:var(--danger);box-shadow:0 0 0 5px var(--ring),0 0 10px 1px rgba(248,113,113,.6);animation:pulse 2s ease-in-out infinite}
+  @keyframes pulse{
+    0%,100%{box-shadow:0 0 0 5px var(--ring),0 0 6px 0 rgba(248,113,113,.5)}
+    50%{box-shadow:0 0 0 5px var(--ring),0 0 18px 4px rgba(248,113,113,.8)}
+  }
+  .pl-name{font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.08em;color:#d4d4d8;white-space:nowrap}
+  .pl-state{font-family:var(--mono);font-size:9px;letter-spacing:.12em;color:var(--text-4);white-space:nowrap}
+  .pl-state.ok{color:rgba(163,230,53,.7)}
+  .pl-state.bad{color:var(--danger-soft)}
+  .pl-stage.locked .pl-name{color:#52525b}
+
+  .console-log{
+    border-top:1px solid var(--border);background:#0a0a0d;
+    padding:16px 22px;display:flex;flex-direction:column;gap:7px;
+  }
+  .log-row{
+    display:flex;gap:14px;align-items:baseline;
+    font-family:var(--mono);font-size:12px;line-height:1.55;color:var(--text-2);
+  }
+  .log-t{color:#3f3f46;flex-shrink:0;font-size:11px}
+  .log-s{flex-shrink:0;width:14px;text-align:center}
+  .log-s.ok{color:var(--lime)}
+  .log-s.bad{color:var(--danger)}
+  .log-s.next{color:var(--lime)}
+  .log-row em{font-style:normal;color:#e4e4e7}
+  .log-banner{
+    margin-top:6px;display:flex;gap:10px;align-items:baseline;
+    border:1px solid rgba(248,113,113,.22);background:rgba(248,113,113,.05);
+    border-radius:8px;padding:10px 14px;
+    font-family:var(--mono);font-size:11.5px;letter-spacing:.03em;color:var(--danger-soft);
+  }
+  .log-banner b{font-weight:600}
+
+  /* ---------- Section heads ---------- */
+  .sec-head{max-width:660px;margin-bottom:44px}
+  .sec-head h2{
+    font-size:clamp(28px,3.6vw,40px);letter-spacing:-.03em;line-height:1.12;
+    font-weight:600;color:#fafafa;margin:14px 0 12px;text-wrap:balance;
+  }
+  .sec-head p{color:var(--text-2);font-size:15.5px}
+  .sec-head.center{margin-inline:auto;text-align:center}
+
+  /* ---------- Bento ---------- */
+  #product{padding:110px 0 0}
+  .bento{display:grid;grid-template-columns:repeat(3,1fr);grid-auto-rows:minmax(248px,auto);gap:14px}
+  .tile{
+    position:relative;display:flex;flex-direction:column;
+    padding:24px;border:1px solid var(--border);border-radius:14px;
+    background:radial-gradient(120% 80% at 0% 0%,rgba(163,230,53,.05),transparent 55%),var(--panel);
+    transition:border-color .22s ease,box-shadow .22s ease,transform .22s ease;
+    overflow:hidden;
+  }
+  .tile:nth-child(even){background:radial-gradient(120% 80% at 100% 0%,rgba(163,230,53,.045),transparent 55%),var(--panel)}
+  .tile:hover{
+    border-color:rgba(163,230,53,.32);transform:translateY(-2px);
+    box-shadow:0 0 0 1px rgba(163,230,53,.14),0 14px 48px rgba(163,230,53,.06);
+  }
+  .tile-violet,.tile-violet:nth-child(even){
+    background:radial-gradient(130% 90% at 100% 0%,rgba(139,92,246,.13),transparent 58%),var(--panel);
+  }
+  .tile-violet:hover{
+    border-color:rgba(167,139,250,.35);
+    box-shadow:0 0 0 1px rgba(167,139,250,.16),0 14px 48px rgba(139,92,246,.08);
+  }
+  .tile-hero{grid-column:span 2;grid-row:span 2;padding:30px}
+  .tile-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+  .tile-icon{
+    width:32px;height:32px;border-radius:8px;border:1px solid var(--border);
+    background:rgba(255,255,255,.03);display:grid;place-items:center;color:var(--lime);flex-shrink:0;
+  }
+  .tile-violet .tile-icon{color:var(--violet)}
+  .tile-num{font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:#3f3f46}
+  .tile h3{font-size:16.5px;font-weight:600;letter-spacing:-.01em;color:#f4f4f5;margin-bottom:8px}
+  .tile-hero h3{font-size:20px}
+  .tile p{font-size:13.8px;color:var(--text-2);line-height:1.62}
+  .tile-hero p{max-width:560px;font-size:14.5px}
+
+  .snip{margin-top:auto;padding-top:18px}
+  .snip-box{
+    border:1px solid rgba(255,255,255,.07);background:rgba(0,0,0,.35);
+    border-radius:9px;padding:11px 14px;
+    font-family:var(--mono);font-size:11px;line-height:1.9;color:var(--text-3);
+  }
+  .snip-box .row{display:flex;justify-content:space-between;gap:14px}
+  .snip-box .row span:last-child{text-align:right;white-space:nowrap}
+  .snip-box .k{color:#d4d4d8}
+  .snip-box .ok{color:var(--lime)}
+  .snip-box .bad{color:var(--danger)}
+  .snip-box .dim{color:#52525b}
+
+  .gate{margin-top:auto;padding-top:22px}
+  .gate-box{border:1px solid rgba(255,255,255,.07);background:rgba(0,0,0,.35);border-radius:10px;overflow:hidden}
+  .gate-head{
+    display:flex;justify-content:space-between;gap:12px;padding:11px 16px;
+    border-bottom:1px solid rgba(255,255,255,.06);
+    font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;color:var(--text-2);
+  }
+  .gate-head .pass{color:var(--lime)}
+  .gate-row{
+    display:grid;grid-template-columns:1.1fr 1.3fr auto;gap:12px;
+    padding:8px 16px;border-bottom:1px dashed rgba(255,255,255,.05);
+    font-family:var(--mono);font-size:11.5px;
+  }
+  .gate-row .gk{color:#d4d4d8}
+  .gate-row .gv{color:var(--text-3)}
+  .gate-row .gm{text-align:right}
+  .gate-row .gm.ok{color:var(--lime)}
+  .gate-row .gm.bad{color:var(--danger)}
+  .gate-row.failed{background:rgba(248,113,113,.04)}
+  .gate-row.failed .gv{color:var(--danger-soft)}
+  .gate-foot{
+    padding:10px 16px;text-align:center;background:rgba(163,230,53,.05);
+    font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--lime-soft);
+  }
+
+  /* ---------- Stats ---------- */
+  .stats-sec{padding:76px 0 0}
+  .stats-wrap{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:var(--border)}
+  .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px}
+  .stat{background:var(--panel-2);padding:32px 28px}
+  .stat .v{
+    font-family:var(--mono);font-size:clamp(28px,3.4vw,40px);font-weight:600;
+    letter-spacing:-.03em;color:var(--lime);text-shadow:0 0 28px rgba(163,230,53,.3);
+    line-height:1.1;
+  }
+  .stat .l{margin-top:8px;font-size:13px;color:var(--text-2);line-height:1.5}
+
+  /* ---------- Pricing ---------- */
+  #pricing{padding:120px 0 0}
+  .price-panel{
+    position:relative;max-width:860px;margin:0 auto;
+    border:1px solid var(--border);border-radius:18px;
+    background:radial-gradient(70% 50% at 50% 0%,rgba(163,230,53,.07),transparent 62%),var(--panel);
+    padding:54px 48px;text-align:center;overflow:hidden;
+  }
+  .price-panel::before{
+    content:'';position:absolute;top:0;left:18%;right:18%;height:1px;
+    background:linear-gradient(90deg,transparent,rgba(163,230,53,.55),transparent);
+  }
+  .price-grid{display:grid;grid-template-columns:1fr 1px 1fr;align-items:stretch;margin-top:40px}
+  .price-cell{padding:6px 30px}
+  .price-div{background:var(--border)}
+  .price-tag{
+    font-family:var(--mono);font-size:10.5px;font-weight:500;
+    letter-spacing:.18em;text-transform:uppercase;color:var(--lime);
+  }
+  .price-val{
+    font-family:var(--mono);font-weight:700;
+    font-size:clamp(54px,7vw,76px);letter-spacing:-.05em;line-height:1.15;
+    color:#fafafa;text-shadow:0 0 44px rgba(163,230,53,.22);margin-top:8px;
+  }
+  .price-val .unit{font-size:.34em;font-weight:500;letter-spacing:-.01em;color:var(--text-3);margin-left:2px}
+  .price-sub{margin:8px auto 0;font-size:13.5px;color:var(--text-2);max-width:300px;line-height:1.58}
+  .feat-grid{
+    display:grid;grid-template-columns:repeat(2,1fr);gap:12px 44px;
+    max-width:640px;margin:42px auto 0;text-align:left;
+  }
+  .feat{display:flex;gap:11px;align-items:flex-start;font-size:14px;color:#d4d4d8}
+  .feat .tick{font-family:var(--mono);color:var(--lime);flex-shrink:0;font-size:13px;line-height:1.7}
+  .price-cta{margin-top:44px;display:flex;flex-direction:column;align-items:center;gap:16px}
+  .price-fine{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;color:var(--text-3);line-height:1.9;max-width:520px}
+
+  /* ---------- Final CTA ---------- */
+  .cta-sec{padding:130px 0 120px;text-align:center}
+  .cta-sec h2{
+    font-size:clamp(30px,4.4vw,46px);letter-spacing:-.04em;font-weight:600;
+    color:#fafafa;margin:18px 0 14px;text-wrap:balance;
+  }
+  .cta-sec p{color:var(--text-2);font-size:15.5px;max-width:520px;margin:0 auto 32px}
+  .cta-row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+
+  /* ---------- Footer ---------- */
+  .footer{border-top:1px solid var(--border);padding:30px 0}
+  .footer-in{display:flex;flex-wrap:wrap;gap:18px 24px;align-items:center;justify-content:space-between}
+  .foot-left{display:flex;flex-direction:column;gap:5px}
+  .brand-sm{font-family:var(--mono);font-size:12.5px;font-weight:600;color:var(--text-2);letter-spacing:-.01em}
+  .foot-copy{font-family:var(--mono);font-size:10.5px;color:var(--text-3);letter-spacing:.02em}
+  .foot-links{display:flex;flex-wrap:wrap;gap:20px;font-family:var(--mono);font-size:10.5px;letter-spacing:.04em;color:var(--text-3)}
+  .foot-links a{transition:color .15s ease}
+  .foot-links a:hover{color:var(--lime-soft)}
+
+  /* ---------- Responsive ---------- */
+  @media (max-width:1024px){
+    .bento{grid-template-columns:1fr 1fr}
+    .tile-hero{grid-column:span 2;grid-row:auto}
+  }
+  @media (max-width:768px){
+    .nav-links{display:none}
+    .nav .btn-ghost{display:none}
+    .hero{padding:64px 0 84px}
+    .hero .sub{font-size:15.5px}
+    .console{margin-top:48px}
+    .pl-scroll{padding:24px 18px 20px}
+    .console-log{padding:14px 16px}
+    .log-row{align-items:flex-start}
+    #product{padding-top:84px}
+    .bento{grid-template-columns:1fr}
+    .tile-hero{grid-column:auto;grid-row:auto;padding:24px}
+    .stats-sec{padding-top:56px}
+    .stats-grid{grid-template-columns:1fr 1fr}
+    .stat{padding:24px 22px}
+    #pricing{padding-top:90px}
+    .price-panel{padding:42px 24px}
+    .price-grid{grid-template-columns:1fr}
+    .price-cell{padding:6px 8px}
+    .price-div{height:1px;width:64%;margin:20px auto}
+    .feat-grid{grid-template-columns:1fr;gap:11px}
+    .cta-sec{padding:96px 0 88px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    html{scroll-behavior:auto}
+    .cursor,.pl-dot.blocked{animation:none}
+    .btn,.tile{transition:none}
+    .tile:hover,.btn-primary:hover{transform:none}
+  }
+</style>
+</head>
+<body>
+
+<!-- ================= NAV ================= -->
+<header class="nav">
+  <div class="container nav-in">
+    <a class="brand" href="#" aria-label="LettingAuto home">lettingauto<span class="cursor" aria-hidden="true"></span></a>
+    <nav class="nav-links" aria-label="Primary">
+      <a href="#product">Product</a>
+      <a href="#pricing">Pricing</a>
+    </nav>
+    <div class="nav-cta">
+      <a class="btn btn-ghost btn-sm" href="#">Sign in</a>
+      <a class="btn btn-primary btn-sm" href="#pricing">Get started</a>
+    </div>
+  </div>
+</header>
+
+<main>
+<!-- ================= HERO ================= -->
+<section class="hero">
+  <div class="container">
+    <span class="pill"><span class="dot"></span>Ready for the Renters&rsquo; Rights Act 2025</span>
+    <h1>Nine stages. Zero illegal move&#8209;ins.</h1>
+    <p class="sub">LettingAuto runs your agency&rsquo;s entire tenancy workflow — take&#8209;on to end of tenancy — through hard compliance gates. Certificates are verified before anyone gets keys, contracts go out under your letterhead, and the audit trail writes itself.</p>
+    <div class="hero-cta">
+      <a class="btn btn-primary" href="#pricing">Start a tenancy</a>
+      <a class="btn btn-ghost" href="#product">See how the gates work</a>
+    </div>
+    <p class="hero-note">Sign in with Google or Microsoft &middot; No seats &middot; No tiers</p>
+
+    <!-- Pipeline console -->
+    <div class="console" role="img" aria-label="Pipeline console showing a tenancy blocked at move-in because the EICR has expired">
+      <div class="console-bar">
+        <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="console-title">pipeline — 14 Arundel Gardens, London W11 &middot; TEN&#8209;0231</span>
+        <span class="console-chip">GATE_07 &middot; HELD</span>
+      </div>
+      <div class="pl-scroll">
+        <div class="pl-track">
+          <span class="pl-line" aria-hidden="true"></span>
+          <span class="pl-line-done" aria-hidden="true"></span>
+          <div class="pl-stage"><span class="pl-dot done"></span><span class="pl-name">TAKE-ON</span><span class="pl-state ok">DONE</span></div>
+          <div class="pl-stage"><span class="pl-dot done"></span><span class="pl-name">COMPLIANCE</span><span class="pl-state ok">DONE</span></div>
+          <div class="pl-stage"><span class="pl-dot done"></span><span class="pl-name">MARKETING</span><span class="pl-state ok">DONE</span></div>
+          <div class="pl-stage"><span class="pl-dot done"></span><span class="pl-name">OFFER</span><span class="pl-state ok">DONE</span></div>
+          <div class="pl-stage"><span class="pl-dot done"></span><span class="pl-name">REFERENCING</span><span class="pl-state ok">DONE</span></div>
+          <div class="pl-stage"><span class="pl-dot done"></span><span class="pl-name">TA-SIGNING</span><span class="pl-state ok">DONE</span></div>
+          <div class="pl-stage"><span class="pl-dot blocked"></span><span class="pl-name">MOVE-IN</span><span class="pl-state bad">BLOCKED</span></div>
+          <div class="pl-stage locked"><span class="pl-dot"></span><span class="pl-name">LIVE</span><span class="pl-state">LOCKED</span></div>
+          <div class="pl-stage locked"><span class="pl-dot"></span><span class="pl-name">END</span><span class="pl-state">LOCKED</span></div>
+        </div>
+      </div>
+      <div class="console-log">
+        <div class="log-row"><span class="log-t">09:41:07</span><span class="log-s ok">&#10003;</span><span>EPC verified — <em>rating C</em>, valid to Mar 2031</span></div>
+        <div class="log-row"><span class="log-t">09:41:09</span><span class="log-s ok">&#10003;</span><span>Gas Safety (CP12) on file — next due <em>14 Aug 2026</em></span></div>
+        <div class="log-row"><span class="log-t">09:41:12</span><span class="log-s ok">&#10003;</span><span>How to Rent guide served — receipt logged</span></div>
+        <div class="log-row"><span class="log-t">09:41:13</span><span class="log-s ok">&#10003;</span><span>Deposit protected with TDS — <em>day 11 of 30</em></span></div>
+        <div class="log-row"><span class="log-t">09:41:15</span><span class="log-s bad">&#10007;</span><span>blocked: <em>EICR expired 31 May 2026</em> — move-in prevented</span></div>
+        <div class="log-banner"><b>&#9632; GATE_07 &middot; MOVE-IN HELD</b><span>unlocks automatically when a valid EICR is on file</span></div>
+        <div class="log-row"><span class="log-t">09:41:16</span><span class="log-s next">&#8594;</span><span>fix requested — new EICR ordered from landlord in one click</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= BENTO ================= -->
+<section id="product">
+  <div class="container">
+    <div class="sec-head">
+      <span class="kicker">Modules</span>
+      <h2>Everything between instruction and keys</h2>
+      <p>Six systems your agency currently runs on spreadsheets, inboxes and goodwill — fused into one pipeline with a single record of truth per tenancy.</p>
+    </div>
+
+    <div class="bento">
+      <!-- 2x2 hero tile: Compliance gates -->
+      <article class="tile tile-hero">
+        <div class="tile-top">
+          <span class="tile-icon" aria-hidden="true">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.6-3 7.6-7 9-4-1.4-7-4.4-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg>
+          </span>
+          <span class="tile-num">MOD_01</span>
+        </div>
+        <h3>Compliance gates</h3>
+        <p>Gas safety, EPC, EICR, How to Rent and deposit protection are hard gates, not reminders. Each one is re&#8209;checked at every stage, and a tenancy physically cannot reach move&#8209;in while a single check is missing or expired — protecting your agency from civil penalties and banning orders.</p>
+        <div class="gate">
+          <div class="gate-box">
+            <div class="gate-head"><span>GATE_02 &middot; COMPLIANCE — RE-CHECKED DAILY</span><span class="pass">4/5</span></div>
+            <div class="gate-row"><span class="gk">gas_cert</span><span class="gv">ON_FILE &middot; CP12</span><span class="gm ok">&#10003;</span></div>
+            <div class="gate-row"><span class="gk">epc</span><span class="gv">RATING_C &middot; 2031</span><span class="gm ok">&#10003;</span></div>
+            <div class="gate-row failed"><span class="gk">eicr</span><span class="gv">EXPIRED &middot; 31_MAY</span><span class="gm bad">&#10007;</span></div>
+            <div class="gate-row"><span class="gk">how_to_rent</span><span class="gv">SERVED &middot; LOGGED</span><span class="gm ok">&#10003;</span></div>
+            <div class="gate-row"><span class="gk">deposit</span><span class="gv">PROTECTED &middot; TDS</span><span class="gm ok">&#10003;</span></div>
+            <div class="gate-foot">MOVE-IN STAYS LOCKED UNTIL 5/5 PASS — NO OVERRIDES</div>
+          </div>
+        </div>
+      </article>
+
+      <!-- Contracts & e-sign (violet) -->
+      <article class="tile tile-violet">
+        <div class="tile-top">
+          <span class="tile-icon" aria-hidden="true">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+          </span>
+          <span class="tile-num">MOD_02</span>
+        </div>
+        <h3>Contracts &amp; e-sign, your brand</h3>
+        <p>ASTs, renewals and statutory notices generated on your letterhead and signed electronically. Landlords and tenants see your agency throughout — we stay invisible.</p>
+        <div class="snip">
+          <div class="snip-box">
+            <div class="row"><span class="k">AST_2026.pdf</span><span class="dim">your letterhead</span></div>
+            <div class="row"><span>landlord</span><span><span class="ok">SIGNED</span> <span class="dim">09:14</span></span></div>
+            <div class="row"><span>tenant_1</span><span><span class="ok">SIGNED</span> <span class="dim">11:47</span></span></div>
+            <div class="row"><span>tenant_2</span><span class="dim">AWAITING &middot; nudged</span></div>
+          </div>
+        </div>
+      </article>
+
+      <!-- Landlord & tenant forms -->
+      <article class="tile">
+        <div class="tile-top">
+          <span class="tile-icon" aria-hidden="true">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M8 11h8M8 15h5"/></svg>
+          </span>
+          <span class="tile-num">MOD_03</span>
+        </div>
+        <h3>Landlord &amp; tenant forms</h3>
+        <p>One link to each party. Bank details, ID and right&#8209;to&#8209;rent documents arrive as structured data — never as a photo of a passport buried in an email thread.</p>
+        <div class="snip">
+          <div class="snip-box">
+            <div class="row"><span>landlord.bank_details</span><span class="ok">&#10003;</span></div>
+            <div class="row"><span>tenant_1.right_to_rent</span><span class="ok">&#10003;</span></div>
+            <div class="row"><span class="k">form_complete</span><span class="k">12/14</span></div>
+          </div>
+        </div>
+      </article>
+
+      <!-- Referencing -->
+      <article class="tile">
+        <div class="tile-top">
+          <span class="tile-icon" aria-hidden="true">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M16 11l2 2 4-4"/></svg>
+          </span>
+          <span class="tile-num">MOD_04</span>
+        </div>
+        <h3>Referencing, wired in</h3>
+        <p>Send applicants to your referencing provider in one click. Results land back on the offer automatically — pass, refer or guarantor required.</p>
+        <div class="snip">
+          <div class="snip-box">
+            <div class="row"><span>tenant_1</span><span class="ok">PASS</span></div>
+            <div class="row"><span>tenant_2</span><span class="ok">PASS</span></div>
+            <div class="row"><span class="k">result &#8594; offer updated</span><span class="dim">auto</span></div>
+          </div>
+        </div>
+      </article>
+
+      <!-- Stripe billing -->
+      <article class="tile">
+        <div class="tile-top">
+          <span class="tile-icon" aria-hidden="true">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/></svg>
+          </span>
+          <span class="tile-num">MOD_05</span>
+        </div>
+        <h3>Stripe billing</h3>
+        <p>Holding deposits, move&#8209;in monies and your own fees collected through Stripe and reconciled against the right tenancy, automatically.</p>
+        <div class="snip">
+          <div class="snip-box">
+            <div class="row"><span>holding_deposit</span><span><span class="k">&pound;461.54</span> <span class="ok">PAID</span></span></div>
+            <div class="row"><span>first_month_rent</span><span><span class="k">&pound;2,000.00</span> <span class="ok">PAID</span></span></div>
+            <div class="row"><span>agency_fee</span><span><span class="k">&pound;300.00</span> <span class="dim">DUE</span></span></div>
+          </div>
+        </div>
+      </article>
+
+      <!-- Audit trail -->
+      <article class="tile">
+        <div class="tile-top">
+          <span class="tile-icon" aria-hidden="true">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          </span>
+          <span class="tile-num">MOD_06</span>
+        </div>
+        <h3>Audit trail</h3>
+        <p>Every upload, approval and gate decision is timestamped and tamper&#8209;evident. When a deposit dispute or ombudsman case lands, export the file and you&rsquo;re done.</p>
+        <div class="snip">
+          <div class="snip-box">
+            <div class="row"><span><span class="bad">eicr.pdf rejected</span> &middot; expired</span><span class="dim">09:41</span></div>
+            <div class="row"><span>eicr_2026.pdf <span class="ok">verified &#10003;</span></span><span class="dim">14:06</span></div>
+            <div class="row"><span class="k">export &#8594; ombudsman-ready PDF</span><span class="dim">any time</span></div>
+          </div>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ================= STATS ================= -->
+<section class="stats-sec" aria-label="Key numbers">
+  <div class="container">
+    <div class="stats-wrap">
+      <div class="stats-grid">
+        <div class="stat"><div class="v">9</div><div class="l">stages in one pipeline, take&#8209;on to end of tenancy</div></div>
+        <div class="stat"><div class="v">&pound;7,000</div><div class="l">in fines prevented, per compliance breach blocked</div></div>
+        <div class="stat"><div class="v">30-day</div><div class="l">deposit protection clock, tracked to the hour</div></div>
+        <div class="stat"><div class="v">2 min</div><div class="l">to onboard a new landlord with a single link</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= PRICING ================= -->
+<section id="pricing">
+  <div class="container">
+    <div class="sec-head center">
+      <span class="kicker">Pricing</span>
+      <h2>Two numbers. No seats. No tiers.</h2>
+      <p>Every feature, every user, every branch. The price only moves when your lettings book does.</p>
+    </div>
+
+    <div class="price-panel">
+      <div class="price-grid">
+        <div class="price-cell">
+          <div class="price-tag">One-time &middot; per new tenancy</div>
+          <div class="price-val">&pound;50</div>
+          <p class="price-sub">Charged when a tenancy enters the pipeline. Covers forms, gates, referencing and signing, all the way to move&#8209;in.</p>
+        </div>
+        <div class="price-div" aria-hidden="true"></div>
+        <div class="price-cell">
+          <div class="price-tag">Monthly &middot; per live tenancy</div>
+          <div class="price-val">&pound;5<span class="unit">/mo</span></div>
+          <p class="price-sub">While the tenancy runs: compliance re&#8209;checks, expiry alerts and renewals. Stops the day it ends.</p>
+        </div>
+      </div>
+
+      <div class="feat-grid">
+        <div class="feat"><span class="tick">&#10003;</span><span>All nine stages and every compliance gate</span></div>
+        <div class="feat"><span class="tick">&#10003;</span><span>Unlimited users, negotiators and branches</span></div>
+        <div class="feat"><span class="tick">&#10003;</span><span>E-signatures under your own branding</span></div>
+        <div class="feat"><span class="tick">&#10003;</span><span>Landlord and tenant onboarding forms</span></div>
+        <div class="feat"><span class="tick">&#10003;</span><span>Referencing integration, results auto-filed</span></div>
+        <div class="feat"><span class="tick">&#10003;</span><span>Stripe payments and reconciliation</span></div>
+        <div class="feat"><span class="tick">&#10003;</span><span>Full audit trail, exportable as PDF</span></div>
+        <div class="feat"><span class="tick">&#10003;</span><span>Google and Microsoft single sign-on</span></div>
+      </div>
+
+      <div class="price-cta">
+        <a class="btn btn-primary" href="#">Get started</a>
+        <p class="price-fine">PRICES EXCLUDE VAT &middot; THE &pound;5/MONTH STOPS THE DAY A TENANCY ENDS &middot; NO CONTRACT, NO MINIMUM TERM</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= FINAL CTA ================= -->
+<section class="cta-sec">
+  <div class="container">
+    <span class="kicker">GATE_00 &middot; OPEN</span>
+    <h2>Put your next tenancy on rails.</h2>
+    <p>Connect your Google or Microsoft account, send your landlord one link, and run your first tenancy through the pipeline this week.</p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="#pricing">Get started</a>
+      <a class="btn btn-ghost" href="#">Sign in</a>
+    </div>
+  </div>
+</section>
+</main>
+
+<!-- ================= FOOTER ================= -->
+<footer class="footer">
+  <div class="container footer-in">
+    <div class="foot-left">
+      <span class="brand-sm">lettingauto</span>
+      <span class="foot-copy">&copy; 2026 LettingAuto Ltd &middot; registered in England &amp; Wales &middot; built for UK letting agencies</span>
+    </div>
+    <nav class="foot-links" aria-label="Footer">
+      <a href="#">privacy</a>
+      <a href="#">terms</a>
+      <a href="#">security</a>
+      <a href="#">status</a>
+      <a href="#">hello@lettingauto.co.uk</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>

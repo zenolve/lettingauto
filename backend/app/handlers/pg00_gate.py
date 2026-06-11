@@ -70,7 +70,7 @@ def _ok() -> str:
 
 def _cert_status_acceptable(field: dict, key: str) -> str:
     v = field.get(key)
-    if v in ("On File", "Palace Gate Arranging"):
+    if v in ("On File", "Agency Arranging"):
         return ""
     return f"{key} = {v or 'missing'}"
 
@@ -273,6 +273,18 @@ async def evaluate_gate(
                 "flags": [],
             },
         )
+    # Billing: reaching stage 8 means a tenancy just went live - keep the
+    # agency's GBP 5/month per-live-tenancy subscription quantity in step.
+    # Best-effort; the daily scheduler reconciles anything missed.
+    if target_stage >= 8:
+        try:
+            from app.services import billing  # noqa: PLC0415 - avoid load cycle
+            aid = at.current_agency_id()
+            if aid:
+                billing.sync_live_tenancies(aid)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("gate.billing_sync_failed err=%s", e)
+
     logger.info("gate.advanced property=%s target=%s silent=%s", property_id, target_stage, silent)
     return GateResult(advanced=True, target_stage=target_stage, failures=[])
 

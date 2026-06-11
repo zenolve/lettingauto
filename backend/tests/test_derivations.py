@@ -16,7 +16,7 @@ def test_cert_status_on_file():
 
 
 def test_cert_status_arranging():
-    assert derive_cert_status("No", "Yes, arrange") == "Palace Gate Arranging"
+    assert derive_cert_status("No", "Yes, arrange") == "Agency Arranging"
 
 
 def test_cert_status_not_provided():

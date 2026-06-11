@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 
+import { AgencyGate } from "./components/AgencyGate";
 import { AgentLayout } from "./components/layout/AgentLayout";
 import { PublicLayout } from "./components/layout/PublicLayout";
 import { RequireAuth } from "./components/RequireAuth";
@@ -16,6 +17,8 @@ import Login from "./pages/Login";
 import Properties from "./pages/Properties";
 import PropertyDetail from "./pages/PropertyDetail";
 import PropertyUploads from "./pages/PropertyUploads";
+import RegisterAgency from "./pages/RegisterAgency";
+import Settings from "./pages/Settings";
 import Signatures from "./pages/Signatures";
 import TemplateEditor from "./pages/TemplateEditor";
 
@@ -30,11 +33,16 @@ export default function App() {
         <Route path="/landlord/verify" element={<LandlordVerification />} />
       </Route>
 
-      {/* Agent app */}
-      <Route element={<RequireAuth><AgentLayout /></RequireAuth>}>
+      {/* Signed in but no agency yet → one-time agency registration */}
+      <Route path="/register-agency" element={<RequireAuth><RegisterAgency /></RequireAuth>} />
+
+      {/* Agent app — requires auth AND an agency membership */}
+      <Route element={<RequireAuth><AgencyGate><AgentLayout /></AgencyGate></RequireAuth>}>
         <Route path="/agent" element={<Dashboard />} />
         <Route path="/agent/properties" element={<Properties />} />
         <Route path="/agent/signatures" element={<Signatures />} />
+        <Route path="/agent/settings" element={<Settings />} />
+        <Route path="/settings" element={<Navigate to="/agent/settings" replace />} />
         <Route path="/agent/library" element={<LibraryIndex />} />
         <Route path="/agent/library/:docId" element={<TemplateEditor />} />
         <Route path="/agent/properties/new" element={<PropertyTakeon />} />

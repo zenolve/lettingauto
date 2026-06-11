@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import threading
 import time
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
@@ -55,6 +56,46 @@ class TableNames:
     OFFERS = "offers"
     SENT_DOCUMENTS = "sent_documents"
     PAYMENTS = "payments"
+    AGENCIES = "agencies"
+    AGENCY_USERS = "agency_users"
+
+
+# ---------------------------------------------------------------------------
+# Agency scope — the multi-tenant isolation point.
+#
+# `require_agent` (core/auth.py) resolves the caller's agency and sets it here
+# for the duration of the request; every read/write on a table that carries an
+# ``agency_id`` column is then automatically (a) filtered to that agency,
+# (b) stamped with it on create, and (c) refused with NOT_FOUND when a row id
+# belongs to a different agency. System paths with no scope set (signing /
+# Stripe / Paragon webhooks, the scheduler) see all agencies — they resolve
+# records by opaque ids/envelope ids and re-establish scope where relevant.
+#
+# This complements (does not replace) the RLS policies in migration 002: the
+# backend connects as the table owner, so app-side scoping is the live guard.
+# ---------------------------------------------------------------------------
+_agency_scope: ContextVar[str | None] = ContextVar("agency_scope", default=None)
+
+# Tables that carry an agency_id column (everything operational; not stages /
+# agencies themselves).
+SCOPED_TABLES = frozenset(
+    name for name, s in SCHEMAS.items()
+    if "agency_id" in s.columns and name != "agencies"
+)
+
+
+def set_agency_scope(agency_id: str | None):
+    """Scope all subsequent db calls in this context to one agency.
+    Returns a token for ``reset_agency_scope``."""
+    return _agency_scope.set(agency_id)
+
+
+def reset_agency_scope(token) -> None:
+    _agency_scope.reset(token)
+
+
+def current_agency_id() -> str | None:
+    return _agency_scope.get()
 
 
 def _schema(name: str) -> TableSchema:
@@ -305,6 +346,7 @@ def _coerce_write(value: Any, typ: str) -> Any:
 
 def _convert_read(value: Any) -> Any:
     """SQL value → JSON-friendly Python value in Airtable conventions."""
+    import uuid as _uuid
     if isinstance(value, Decimal):
         f = float(value)
         return int(f) if f.is_integer() else f
@@ -312,6 +354,8 @@ def _convert_read(value: Any) -> Any:
         return value.isoformat()
     if isinstance(value, date):
         return value.isoformat()
+    if isinstance(value, _uuid.UUID):
+        return str(value)
     return value
 
 
@@ -355,6 +399,14 @@ def _row_to_record(schema: TableSchema, row: dict) -> dict:
     }
 
 
+def _scope_clause(name: str) -> tuple[str | None, list]:
+    """WHERE fragment confining a query to the current agency (or None)."""
+    aid = _agency_scope.get()
+    if aid and name in SCOPED_TABLES:
+        return "t.agency_id = %s", [aid]
+    return None, []
+
+
 def _query_records(
     name: str,
     cond: Cond | None,
@@ -364,13 +416,20 @@ def _query_records(
     schema = _schema(name)
     sql = _select_sql(schema)
     params: list = []
+    wheres: list[str] = []
     if record_id is not None:
-        sql += " where t.id = %s"
+        wheres.append("t.id = %s")
         params.append(record_id)
     elif cond is not None:
         frag, ps = _cond_to_sql(schema, cond)
-        sql += f" where {frag}"
+        wheres.append(frag)
         params.extend(ps)
+    scope_frag, scope_params = _scope_clause(name)
+    if scope_frag:
+        wheres.append(scope_frag)
+        params.extend(scope_params)
+    if wheres:
+        sql += " where " + " and ".join(wheres)
     sql += " order by t.created_at, t.id"
     if max_records:
         sql += " limit %s"
@@ -397,7 +456,7 @@ def search(name: str, formula: Cond, max_records: int | None = None, *, fresh: b
     ``formula`` is a structured condition from eq()/and_()/or_()/is_before().
     ``fresh=True`` bypasses the cache for this read (and does not refresh it).
     """
-    key = ("search", name, repr(formula), max_records)
+    key = ("search", name, _agency_scope.get(), repr(formula), max_records)
     if CACHE_ENABLED and not fresh:
         hit = _cache.get(key)
         if hit is not _MISS:
@@ -414,7 +473,7 @@ def find_first(name: str, formula: Cond, *, fresh: bool = False) -> dict | None:
 
 
 def get(name: str, record_id: str, *, fresh: bool = False) -> dict:
-    key = ("get", name, record_id)
+    key = ("get", name, _agency_scope.get(), record_id)
     if CACHE_ENABLED and not fresh:
         hit = _cache.get(key)
         if hit is not _MISS:
@@ -470,6 +529,12 @@ def create(name: str, fields: dict) -> dict:
     schema = _schema(name)
     scalars, links = _split_fields(schema, name, fields)
 
+    # Stamp the current agency on scoped tables unless explicitly provided
+    # (registration / system paths pass it themselves).
+    aid = _agency_scope.get()
+    if aid and name in SCOPED_TABLES and not scalars.get("agency_id"):
+        scalars["agency_id"] = aid
+
     def _run() -> str:
         with _get_pool().connection() as conn:
             with conn.transaction():
@@ -497,6 +562,9 @@ def update(name: str, record_id: str, fields: dict) -> dict:
     schema = _schema(name)
     scalars, links = _split_fields(schema, name, fields)
 
+    scope_frag, scope_params = _scope_clause(name)
+    guard = f" and {scope_frag}".replace("t.", "") if scope_frag else ""
+
     def _run() -> None:
         with _get_pool().connection() as conn:
             with conn.transaction():
@@ -504,13 +572,13 @@ def update(name: str, record_id: str, fields: dict) -> dict:
                     if scalars:
                         sets = ", ".join(f"{c} = %s" for c in scalars)
                         cur.execute(
-                            f"update {schema.sql_table} set {sets} where id = %s returning id",
-                            [*scalars.values(), record_id],
+                            f"update {schema.sql_table} set {sets} where id = %s{guard} returning id",
+                            [*scalars.values(), record_id, *scope_params],
                         )
                     else:
                         cur.execute(
-                            f"update {schema.sql_table} set updated_at = now() where id = %s returning id",
-                            [record_id],
+                            f"update {schema.sql_table} set updated_at = now() where id = %s{guard} returning id",
+                            [record_id, *scope_params],
                         )
                     if cur.fetchone() is None:
                         raise KeyError(f"NOT_FOUND: no {name} record with id {record_id!r}")
@@ -524,11 +592,16 @@ def update(name: str, record_id: str, fields: dict) -> dict:
 def delete(name: str, record_id: str) -> dict:
     logger.info("supabase.delete table=%s id=%s", name, record_id)
     schema = _schema(name)
+    scope_frag, scope_params = _scope_clause(name)
+    guard = f" and {scope_frag}".replace("t.", "") if scope_frag else ""
 
     def _run() -> None:
         with _get_pool().connection() as conn:
             with conn.cursor() as cur:
-                cur.execute(f"delete from {schema.sql_table} where id = %s returning id", [record_id])
+                cur.execute(
+                    f"delete from {schema.sql_table} where id = %s{guard} returning id",
+                    [record_id, *scope_params],
+                )
                 if cur.fetchone() is None:
                     raise KeyError(f"NOT_FOUND: no {name} record with id {record_id!r}")
 
@@ -538,7 +611,7 @@ def delete(name: str, record_id: str) -> dict:
 
 
 def all_records(name: str, formula: Cond | None = None, *, fresh: bool = False) -> list[dict]:
-    key = ("all", name, repr(formula) if formula is not None else None)
+    key = ("all", name, _agency_scope.get(), repr(formula) if formula is not None else None)
     if CACHE_ENABLED and not fresh:
         hit = _cache.get(key)
         if hit is not _MISS:

@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.core.logger import get_logger
 from app.routers import (
+    agencies,
     auth,
     checklist,
     contracts,
@@ -20,6 +21,7 @@ from app.routers import (
     properties,
     referencing,
     signatures,
+    tenants,
     uploads,
     webhooks,
 )
@@ -30,9 +32,9 @@ logger = get_logger(__name__)
 
 def create_app() -> FastAPI:
     app = FastAPI(
-        title=f"{settings.brand_name} — Backend",
+        title=f"{settings.platform_name} — Backend",
         version="1.0.0",
-        description="FastAPI service replacing the n8n workflow for Palace Gate Lettings.",
+        description="Lettings workflow automation for letting agencies.",
     )
 
     app.add_middleware(
@@ -44,7 +46,9 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(auth.router)
+    app.include_router(agencies.router)
     app.include_router(dashboard.router)
+    app.include_router(tenants.router)
     app.include_router(properties.router)
     app.include_router(forms.router)
     app.include_router(contracts.router)

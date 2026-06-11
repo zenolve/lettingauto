@@ -374,10 +374,10 @@ def _render_pdf_with_fallback(
     Production hosts should have WeasyPrint installed so the branded shell
     + page numbering work; the fallback is functional but plainer.
     """
-    # Substitute any /pg_sigN/ anchors with the chosen Palace Gate signatory's
+    # Substitute any /pg_sigN/ anchors with the chosen agency signatory's
     # PNG BEFORE the contract shell wraps the body. The result is baked into
     # the PDF so DocuSign only sees the recipient-facing /sigN/ markers and
-    # treats Palace Gate's signature as static content.
+    # treats the agency's signature as static content.
     from app.services.pre_signatures import substitute as _pre_sig_substitute  # noqa: PLC0415
     body_with_sigs, _ = _pre_sig_substitute(final_body, choices=signature_choices)
 
@@ -406,6 +406,9 @@ def _render_pdf_with_fallback(
     # wall of text (reported by the user in the screenshot dated 2026-05-16).
     from fpdf import FPDF  # local import â€” only required for the fallback path
 
+    from app.core.branding import get_brand  # noqa: PLC0415 - agency-branded header
+    _brand_name = get_brand().name
+
     class _PDF(FPDF):
         def header(self):
             # Navy title band on every page, mirroring the WeasyPrint shell.
@@ -414,7 +417,7 @@ def _render_pdf_with_fallback(
             self.set_text_color(255, 255, 255)
             self.set_font("Helvetica", "B", 10)
             self.set_xy(15, 4.5)
-            self.cell(0, 5, _ascii_safe_html(f"Palace Gate Lettings â€” {title}"), ln=1)
+            self.cell(0, 5, _ascii_safe_html(f"{_brand_name} â€” {title}"), ln=1)
             self.set_text_color(0, 0, 0)
             self.set_y(20)
 

@@ -1,4 +1,4 @@
-"""SMTP email client with Palace Gate branded HTML templates.
+"""SMTP email client with agency-branded HTML templates.
 
 Templates live in `app/templates/emails/*.html` and are Jinja2 rendered.
 """
@@ -25,9 +25,16 @@ _env = Environment(
 
 
 def render(template_name: str, **ctx: Any) -> str:
-    ctx.setdefault("brand_navy", settings.brand_navy)
-    ctx.setdefault("brand_gold", settings.brand_gold)
-    ctx.setdefault("brand_name", settings.brand_name)
+    # Emails are branded with the CURRENT AGENCY's identity (multi-tenant);
+    # platform defaults apply when no agency scope is set.
+    from app.core.branding import get_brand  # local import — avoid cycles
+    b = get_brand()
+    ctx.setdefault("brand_navy", b.navy)
+    ctx.setdefault("brand_gold", b.gold)
+    ctx.setdefault("brand_name", b.name)
+    ctx.setdefault("agency_name", b.name)
+    ctx.setdefault("agency_email", b.email)
+    ctx.setdefault("agency_phone", b.phone)
     return _env.get_template(template_name).render(**ctx)
 
 
@@ -105,6 +112,7 @@ async def send_email(
 # High-level convenience wrappers — one per email ID in spec §8.2
 # ---------------------------------------------------------------------------
 async def send_admin_form_link(landlord_email: str, *, property_address: str, form_url: str) -> None:
+    from app.core.branding import get_brand  # local import — avoid cycles
     html = render(
         "E01_admin_link.html",
         property_address=property_address,
@@ -112,12 +120,13 @@ async def send_admin_form_link(landlord_email: str, *, property_address: str, fo
     )
     await send_email(
         landlord_email,
-        subject=f"Welcome to {settings.brand_name} — complete your property details",
+        subject=f"Welcome to {get_brand().name} — complete your property details",
         html=html,
     )
 
 
 async def send_verification_link(landlord_email: str, *, property_address: str, form_url: str) -> None:
+    from app.core.branding import get_brand  # local import — avoid cycles
     html = render(
         "E03_verification_link.html",
         property_address=property_address,
@@ -125,7 +134,7 @@ async def send_verification_link(landlord_email: str, *, property_address: str, 
     )
     await send_email(
         landlord_email,
-        subject=f"{settings.brand_name} — verify your identity",
+        subject=f"{get_brand().name} — verify your identity",
         html=html,
     )
 

@@ -190,7 +190,7 @@ def normalise_docusign_event(connect_payload: dict[str, Any]) -> dict[str, Any]:
             "envelopeId": "...",
             "envelopeSummary": {
               "status": "completed",
-              "emailSubject": "Palace Gate Terms & Conditions 2026",
+              "emailSubject": "Agency Terms & Conditions 2026",
               "customFields": { "textCustomFields": [{"name": "property_id", "value": "rec..."}, ...]},
               "recipients": { "signers": [...], "carbonCopies": [...] }
             }

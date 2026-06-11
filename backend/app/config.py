@@ -22,7 +22,14 @@ class Settings(BaseSettings):
     # --- Auth ---------------------------------------------------------------
     jwt_secret: str = "dev-only-secret-change-me"
     jwt_ttl_hours: int = 12
-    agent_bootstrap_email: str = "admin@palacegate.co.uk"
+    # Supabase Auth: agents sign in on the frontend via supabase-js (email /
+    # Google / Microsoft); the backend verifies the Supabase access token with
+    # the project's JWT secret (Supabase → Settings → API → JWT Secret).
+    supabase_jwt_secret: str = ""
+    # Legacy single-user login. Handy for local dev and the smoke script; it
+    # auto-provisions a "Bootstrap Agency". Disable in production.
+    allow_bootstrap_login: bool = True
+    agent_bootstrap_email: str = "admin@example.com"
     agent_bootstrap_password: str = "ChangeMeImmediately!"
 
     # --- Supabase (Postgres) --------------------------------------------------
@@ -37,11 +44,17 @@ class Settings(BaseSettings):
     supabase_service_role_key: str = ""
 
     # --- Stripe ----------------------------------------------------------------
-    # Payments (holding deposits / deposits / rent) via Stripe Checkout.
-    # Leave blank to disable — the payments endpoints then return 501.
+    # Payments (holding deposits / deposits / rent) via Stripe Checkout, plus
+    # agency billing. Leave the secret key blank to disable billing entirely
+    # (endpoints return 501 and the tenancy-fee gate is skipped).
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
     stripe_currency: str = "gbp"
+    # Agency pricing: £50 one-time per new tenancy + £5/month per live tenancy.
+    # stripe_price_live_tenancy is a recurring per-unit Price id (£5/month);
+    # the subscription quantity tracks the agency's live tenancy count.
+    stripe_price_live_tenancy: str = ""
+    stripe_tenancy_setup_fee_pence: int = 5000
 
     # --- SMTP ---------------------------------------------------------------
     smtp_host: str = ""
@@ -49,14 +62,15 @@ class Settings(BaseSettings):
     smtp_user: str = ""
     smtp_pass: str = ""
     smtp_use_tls: bool = True
-    from_email: str = "noreply@palacegate.co.uk"
-    admin_email: str = "admin@palacegate.co.uk"
-    lesley_email: str = "lesley@palacegate.co.uk"
+    from_email: str = "noreply@lettingauto.app"
+    admin_email: str = "admin@lettingauto.app"
+    # Back-office assignee for NRL tax-cert diary entries (name is historical).
+    lesley_email: str = "admin@lettingauto.app"
 
     # --- DocuSeal -----------------------------------------------------------
     # Kept for when we flip back to DocuSeal; the live signing pipeline is on
     # DocuSign (app/core/signing.py picks the provider based on app_env).
-    docuseal_url: str = "https://docuseal.palacegate.co.uk"
+    docuseal_url: str = "https://docuseal.example.com"
     docuseal_token: str = ""
     docuseal_webhook_secret: str = ""
 
@@ -86,9 +100,13 @@ class Settings(BaseSettings):
     scheduler_internal_token: str = "dev-only-scheduler-token"
 
     # --- Brand --------------------------------------------------------------
+    # Platform defaults. At runtime, documents/emails are branded with the
+    # CURRENT AGENCY's name/colours (see app/core/branding.py); these values
+    # are the fallback when no agency scope is set.
     brand_navy: str = "#004AAD"
     brand_gold: str = "#C9A24C"
-    brand_name: str = "Palace Gate Lettings"
+    brand_name: str = "LettingAuto"
+    platform_name: str = "LettingAuto"
 
 
 @lru_cache

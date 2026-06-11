@@ -50,6 +50,20 @@ def _find_property(metadata: dict[str, Any] | None) -> dict | None:
 
 
 async def handle_docuseal_event(payload: dict[str, Any]) -> dict:
+    """Webhook entrypoint: resolve the property, scope the request to its
+    agency (multi-tenant isolation + correct branding on the emails this
+    handler sends), then process the signing event."""
+    data = payload.get("data") or {}
+    metadata = data.get("metadata") or {}
+    prop = _find_property(metadata)
+    scope = at.set_agency_scope((prop or {}).get("fields", {}).get("agency_id"))
+    try:
+        return await _handle_event(payload, prop)
+    finally:
+        at.reset_agency_scope(scope)
+
+
+async def _handle_event(payload: dict[str, Any], prop: dict | None) -> dict:
     event = payload.get("event") or payload.get("event_type") or ""
     data = payload.get("data") or {}
     template = data.get("template") or {}
@@ -58,7 +72,6 @@ async def handle_docuseal_event(payload: dict[str, Any]) -> dict:
     metadata = data.get("metadata") or {}
     kind = _doc_kind(template_name, metadata.get("library_doc"))
 
-    prop = _find_property(metadata)
     if not prop:
         logger.warning("docuseal.event property not found template=%r", template_name)
         return {"ignored": True, "reason": "property_not_found"}
@@ -270,7 +283,7 @@ def _create_ta_diary_entries(property_id: str, fields: dict) -> None:
 
     For APT (Renters' Rights Act 2025): Section 13 / Form 4A rent-review notice
     must be served 2.5 months before the 12-month anniversary â€” i.e. at
-    month 9.5. Missing this means no rent increase is possible and Palace Gate
+    month 9.5. Missing this means no rent increase is possible and the agency
     could be liable to the landlord (per master doc CRITICAL DEADLINES Â§53/Â§96).
     """
     today = date.today()

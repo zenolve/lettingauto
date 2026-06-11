@@ -8,7 +8,7 @@ the body + merge fields into the editor.
 Two sources of content:
 - **Real**: HTML files under ``backend/app/templates/library/`` (extracted from
   source .docx / .doc via ``scripts/extract_library_docs.py``).
-- **Placeholder**: TPL-XX entries whose source is the master Palace Gate doc
+- **Placeholder**: TPL-XX entries whose source is the master correspondence doc
   but whose body hasn't been imported yet. They open in the editor with a
   short placeholder body so the agent can still pick them and we can wire
   the workflow end-to-end. Replace with real content as templates land.
@@ -77,7 +77,7 @@ def _placeholder_body(name: str, tpl_id: str) -> str:
 # ---------------------------------------------------------------------------
 # Catalog. Each row is one document the library will surface.
 #
-# Stage mapping notes (per master Palace Gate doc + user instruction):
+# Stage mapping notes (per master correspondence doc + user instruction):
 #   1 Take-on        — TPL-01 Intro Valuation, TPL-02 Instruction, TPL-04 T&C Reminder
 #   2 Compliance     — TPL-03 KYC + TPL-07 Legal Reqs + TPL-08 Pre-Tenancy Works
 #                      + PG T&C 2026 (user-supplied)
@@ -101,7 +101,7 @@ def _tpl(tpl_id: str, name: str, stage: int, mode: DocMode = "email_html", signe
     """Register a TPL.
 
     If a matching file exists under ``templates/library/<id>.html`` (extracted
-    by ``scripts/extract_master_tpls.py`` from the master Palace Gate doc), the
+    by ``scripts/extract_master_tpls.py`` from the master correspondence doc), the
     entry is registered as ``library_file`` and the body is loaded from disk.
     Otherwise it falls back to a placeholder body that still renders in the
     editor so the workflow keeps working.
@@ -118,14 +118,14 @@ def _tpl(tpl_id: str, name: str, stage: int, mode: DocMode = "email_html", signe
         body_file=body_filename if body_exists else None,
         placeholder_body=None if body_exists else _placeholder_body(name, tpl_id),
         signers=signers or [],
-        description="Master Palace Gate correspondence library.",
+        description="Master correspondence library.",
     )
 
 
 # --- User-supplied library files (real content) -----------------------------
 _add(
     id="pg_tcs_2026",
-    name="Palace Gate Terms & Conditions 2026",
+    name="Agency Terms & Conditions 2026",
     stage=2,
     default_mode="sign",
     source="library_file",
@@ -135,7 +135,7 @@ _add(
     # drops the signHere tab at /sig1/ for the first signer and /sig2/ for
     # the second; with one signer the /sig2/ marker stays as literal text.
     anchor_strings=["/sig1/", "/sig2/"],
-    description="Current Palace Gate Terms & Conditions of Business. Compliance stage — must be signed by the landlord before money moves.",
+    description="Current agency Terms & Conditions of Business. Compliance stage — must be signed by the landlord before money moves.",
 )
 _add(
     id="apt_pet_abnb",
@@ -205,7 +205,7 @@ _tpl("TPL-24", "Inspection Report Cover Letter to Landlord", 8, "email_pdf")
 _tpl("TPL-25", "Month-1 Settling-In Check",       8, "email_html")
 _tpl("TPL-26", "Six-Month Check-In",              8, "email_html")
 _tpl("TPL-27", "London Lifestyle Newsletter / Market Update", 8, "email_html")
-_tpl("TPL-28", "Palace Gate Services Introduction to Tenant", 8, "email_html")
+_tpl("TPL-28", "Agency Services Introduction to Tenant", 8, "email_html")
 _tpl("TPL-29", "Tenancy Anniversary Note",        8, "email_html")
 _tpl("TPL-30", "Landlord Market Update",          8, "email_html")
 _tpl("TPL-31", "Landlord Proactive Property Health Summary", 8, "email_pdf")

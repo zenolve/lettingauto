@@ -14,15 +14,12 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from app.config import settings
 from app.db import supabase_client as at
 
 # Agent / brand details used across all correspondence. brand_name comes from
 # settings; the rest are editable constants here (move to config if they need
 # to vary per environment).
-_AGENT_OFFICE_ADDRESS = "11 Palace Gate, Kensington, London W8 5LS"
-_AGENT_PHONE = "020 7937 0000"
-_AGENT_EMAIL = "lettings@palacegate.co.uk"
+# (constants replaced by the per-agency brand - app/core/branding.py)
 
 
 def _first(v: Any) -> str | None:
@@ -52,6 +49,8 @@ def _resolve_tenant(pf: dict) -> dict:
 
 
 def build_merge_context(property_id: str) -> dict[str, Any]:
+    from app.core.branding import get_brand  # local import - avoid cycles
+    _brand = get_brand()
     prop = at.get(at.TableNames.PROPERTIES, property_id)
     pf = prop.get("fields", {})
 
@@ -61,11 +60,12 @@ def build_merge_context(property_id: str) -> dict[str, Any]:
     tenant = _resolve_tenant(pf)
 
     return {
-        # --- brand / agent (static) ---
-        "brand_name": getattr(settings, "brand_name", "Palace Gate"),
-        "agent_office_address": _AGENT_OFFICE_ADDRESS,
-        "agent_phone": _AGENT_PHONE,
-        "agent_email": _AGENT_EMAIL,
+        # --- brand / agency (from the current agency record) ---
+        "brand_name": _brand.name,
+        "agency_name": _brand.name,
+        "agent_office_address": _brand.office_address,
+        "agent_phone": _brand.phone,
+        "agent_email": _brand.email,
         "today": date.today().strftime("%d %B %Y"),
 
         # --- property ---
@@ -128,7 +128,8 @@ def build_merge_context(property_id: str) -> dict[str, Any]:
 
 # Catalogue exposed to the frontend editor palette.
 MERGE_FIELD_CATALOGUE: list[dict] = [
-    {"group": "Agent", "key": "brand_name", "label": "Agency name"},
+    {"group": "Agent", "key": "agency_name", "label": "Agency name"},
+    {"group": "Agent", "key": "brand_name", "label": "Agency name (alias)"},
     {"group": "Agent", "key": "agent_office_address", "label": "Agency address"},
     {"group": "Agent", "key": "agent_phone", "label": "Agency phone"},
     {"group": "Agent", "key": "agent_email", "label": "Agency email"},

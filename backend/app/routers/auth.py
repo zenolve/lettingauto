@@ -30,6 +30,15 @@ class LoginResponse(BaseModel):
 
 @router.post("/login", response_model=LoginResponse)
 def login(body: LoginRequest) -> LoginResponse:
+    """Legacy bootstrap login (single env-configured account, dev only).
+
+    Production sign-in is Supabase Auth on the frontend (email / Google /
+    Microsoft) — the backend just verifies those tokens in require_agent.
+    """
+    from app.config import settings  # noqa: PLC0415
+    if not settings.allow_bootstrap_login:
+        raise HTTPException(status.HTTP_403_FORBIDDEN,
+                            "Password login is disabled — sign in with Supabase Auth.")
     agent = get_agent_by_email(body.email)
     if not agent or not verify_password(body.password, agent.hashed_password):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid email or password")
@@ -38,7 +47,8 @@ def login(body: LoginRequest) -> LoginResponse:
 
 @router.get("/me")
 def me(agent: Agent = Depends(require_agent)) -> dict:
-    return {"email": agent.email, "name": agent.name}
+    return {"email": agent.email, "name": agent.name,
+            "agency_id": agent.agency_id, "role": agent.role}
 
 
 @router.get("/form-token")
@@ -53,6 +63,14 @@ def inspect_form_token(token: str, form: str | None = None) -> dict:
     """
     payload = decode_form_token(token, expected_form=form)
     out = payload.model_dump()
+    # Surface the inviting agency's name so the public landlord forms address
+    # the landlord as that agency (no platform branding leaks).
+    if payload.agency_id:
+        try:
+            af = at.get(at.TableNames.AGENCIES, payload.agency_id).get("fields", {})
+            out["agency_name"] = af.get("name")
+        except Exception:
+            pass
     if payload.landlord_id:
         try:
             landlord = at.get(at.TableNames.LANDLORDS, payload.landlord_id)

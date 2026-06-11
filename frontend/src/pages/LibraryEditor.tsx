@@ -87,9 +87,11 @@ export default function LibraryEditor() {
           email: roleEmail(role, r.data.merge_fields),
           mandatory: true,
         })));
-        // Sensible default cover for the email-pdf mode
+        // Sensible default cover for the email-pdf mode — signed off with the
+        // sending agency's name (agency_name lives in the merge context).
         const ll = r.data.merge_fields.landlord_full_name ?? "";
-        setCoverHtml(`<p>Dear ${ll || "[recipient]"},</p><p>Please find ${r.data.document.name} attached.</p><p>Kind regards,<br/>Palace Gate Lettings</p>`);
+        const agency = r.data.merge_fields.agency_name ?? r.data.merge_fields.brand_name ?? "";
+        setCoverHtml(`<p>Dear ${ll || "[recipient]"},</p><p>Please find ${r.data.document.name} attached.</p><p>Kind regards,<br/>${agency}</p>`);
       })
       .catch((e) => setError(e?.response?.data?.detail ?? "Failed to load document"));
     // Signatures registry — load once on mount. System-wide so no
@@ -316,7 +318,7 @@ export default function LibraryEditor() {
           {usedAnchors.length > 0 && (
             <div className="bg-gold-200/40 border border-gold-300 rounded px-3 py-3 mb-3 space-y-2">
               <div className="text-xs font-medium text-gold-700">
-                Palace Gate signatures — {usedAnchors.length} slot{usedAnchors.length === 1 ? "" : "s"}
+                Agency signatures — {usedAnchors.length} slot{usedAnchors.length === 1 ? "" : "s"}
               </div>
               {signatures.length === 0 ? (
                 <p className="text-xs text-rose-700">

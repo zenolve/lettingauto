@@ -1,8 +1,8 @@
 """HTML → PDF rendering for the contract editor.
 
 Uses WeasyPrint so we get proper CSS support (page-break, headers, footers,
-table-of-contents). The renderer wraps the contract body in the Palace Gate
-branded shell defined in `templates/contracts/_shell.html`.
+table-of-contents). The renderer wraps the contract body in the current
+agency's branded shell defined in `templates/contracts/_shell.html`.
 """
 from __future__ import annotations
 
@@ -11,21 +11,21 @@ from typing import Any
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from app.config import settings
-
 _DIR = Path(__file__).resolve().parent.parent / "templates" / "contracts"
 _env = Environment(loader=FileSystemLoader(str(_DIR)), autoescape=select_autoescape(["html"]))
 
 
 def render_contract_html(body_html: str, *, title: str, footer_text: str | None = None) -> str:
-    """Wrap an editor body in the branded shell."""
+    """Wrap an editor body in the current agency's branded shell."""
+    from app.core.branding import get_brand  # local import — avoid cycles
+    b = get_brand()
     return _env.get_template("_shell.html").render(
         body_html=body_html,
         title=title,
-        footer_text=footer_text or settings.brand_name,
-        brand_navy=settings.brand_navy,
-        brand_gold=settings.brand_gold,
-        brand_name=settings.brand_name,
+        footer_text=footer_text or b.name,
+        brand_navy=b.navy,
+        brand_gold=b.gold,
+        brand_name=b.name,
     )
 
 
@@ -80,9 +80,11 @@ def html_to_pdf_chromium(html: str, *, timeout_s: int = 60) -> bytes:
 
 def render_template_to_html(template_name: str, **ctx: Any) -> str:
     """Render one of the bundled contract templates with the given context."""
+    from app.core.branding import get_brand  # local import — avoid cycles
+    b = get_brand()
     return _env.get_template(template_name).render(
-        brand_navy=settings.brand_navy,
-        brand_gold=settings.brand_gold,
-        brand_name=settings.brand_name,
+        brand_navy=b.navy,
+        brand_gold=b.gold,
+        brand_name=b.name,
         **ctx,
     )

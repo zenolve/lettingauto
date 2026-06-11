@@ -50,6 +50,16 @@ async def main() -> None:
     from app.services.offers import accept_offer, offers_for_property
     from app.services.sent_documents import record_sent, update_status_by_envelope
 
+    # ---------------------------------------------------- agencies + isolation
+    # The commercial product is multi-tenant: create two agencies and run the
+    # whole flow scoped to agency A, then prove agency B can't see any of it.
+    agency_a = at.create(at.TableNames.AGENCIES, {"name": "Smoke Agency A", "slug": "smoke-a",
+                                                  "email": "a@smoke.example.com"})
+    agency_b = at.create(at.TableNames.AGENCIES, {"name": "Smoke Agency B", "slug": "smoke-b",
+                                                  "email": "b@smoke.example.com"})
+    check("agencies created", bool(agency_a["id"] and agency_b["id"]))
+    at.set_agency_scope(agency_a["id"])
+
     # ------------------------------------------------------------ PG_01 take-on
     res = await handle_takeon(PropertyTakeonInput(
         address="1 Smoke Test Mews, London",
@@ -75,6 +85,26 @@ async def main() -> None:
           str(ll["fields"].get("Properties")))
     check("submission audit row linked", len(pf.get("Submissions") or []) == 1)
     check("createdTime present", bool(prop.get("createdTime")))
+    check("agency stamped on property", pf.get("agency_id") == agency_a["id"], str(pf.get("agency_id")))
+
+    # Cross-agency isolation: under agency B's scope, A's data is invisible.
+    b_scope = at.set_agency_scope(agency_b["id"])
+    try:
+        check("isolation: B sees no properties", at.all_records(at.TableNames.PROPERTIES, fresh=True) == [])
+        try:
+            at.get(at.TableNames.PROPERTIES, pid, fresh=True)
+            check("isolation: B cannot get A's property", False)
+        except Exception:
+            check("isolation: B cannot get A's property", True)
+        try:
+            at.update(at.TableNames.PROPERTIES, pid, {"Address": "hijack attempt"})
+            check("isolation: B cannot update A's property", False)
+        except Exception:
+            check("isolation: B cannot update A's property", True)
+    finally:
+        at.reset_agency_scope(b_scope)
+    check("A still sees its property",
+          len(at.all_records(at.TableNames.PROPERTIES, fresh=True)) == 1)
 
     # ------------------------------------------------- stage 2→3 (compliance)
     at.update(at.TableNames.PROPERTIES, pid, {
@@ -185,6 +215,13 @@ async def main() -> None:
         check("property gone after delete", False)
     except Exception:
         check("property gone after delete", True)
+
+    # Remove the smoke agencies (unscoped system op; FK cascade clears any
+    # stragglers the per-row deletes above missed).
+    at.set_agency_scope(None)
+    at.delete(at.TableNames.AGENCIES, agency_a["id"])
+    at.delete(at.TableNames.AGENCIES, agency_b["id"])
+    check("smoke agencies removed", True)
 
     print("\nAll smoke checks passed.")
 

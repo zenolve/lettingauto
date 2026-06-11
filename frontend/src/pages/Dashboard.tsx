@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
+import { useAgencyName } from "../lib/agency";
 import { api, DashboardData } from "../lib/api";
 
 // ---------------------------------------------------------------------------
@@ -152,6 +153,7 @@ function UrgencyChip({ days }: { days: number }) {
 export default function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const agencyName = useAgencyName();
 
   useEffect(() => {
     api.get<DashboardData>("/api/dashboard")
@@ -190,7 +192,7 @@ export default function Dashboard() {
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <div className="kicker">Today at Palace Gate</div>
+          <div className="kicker">Today at {agencyName}</div>
           <h1 className="!text-h2 mt-1">Dashboard</h1>
           <p className="text-sm text-ink-muted mt-1">
             {pipeline.total} propert{pipeline.total === 1 ? "y" : "ies"} · {portfolio.active_tenancies} active ·
