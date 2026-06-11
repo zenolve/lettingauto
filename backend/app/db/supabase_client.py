@@ -610,6 +610,35 @@ def delete(name: str, record_id: str) -> dict:
     return {"id": record_id, "deleted": True}
 
 
+def try_transition(name: str, record_id: str, field: str, from_value: Any, to_value: Any) -> bool:
+    """Atomic compare-and-set on one scalar field — the exactly-once guard for
+    concurrent fulfillment paths (e.g. Stripe webhook vs. success-redirect
+    both trying to fulfil the same paid checkout). Returns True only for the
+    caller that won the transition. Scope-guarded like update()."""
+    schema = _schema(name)
+    col = schema.columns.get(field)
+    if col is None:
+        raise KeyError(f"UNKNOWN_FIELD_NAME: {field!r} is not a field on table {name!r}")
+    scope_frag, scope_params = _scope_clause(name)
+    guard = f" and {scope_frag}".replace("t.", "") if scope_frag else ""
+
+    def _run() -> bool:
+        with _get_pool().connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"update {schema.sql_table} set {col.name} = %s "
+                    f"where id = %s and {col.name} = %s{guard} returning id",
+                    [_coerce_write(to_value, col.type), record_id,
+                     _coerce_write(from_value, col.type), *scope_params],
+                )
+                return cur.fetchone() is not None
+
+    won = with_retry(_run)
+    if won:
+        _invalidate_for_write(name)
+    return won
+
+
 def all_records(name: str, formula: Cond | None = None, *, fresh: bool = False) -> list[dict]:
     key = ("all", name, _agency_scope.get(), repr(formula) if formula is not None else None)
     if CACHE_ENABLED and not fresh:

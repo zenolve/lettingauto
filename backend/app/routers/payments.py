@@ -200,19 +200,30 @@ async def stripe_webhook(
 
     handled = False
     if etype == "checkout.session.completed":
-        # One-time payment completed (tenancy fee or any other Checkout Session).
-        # Match the payment row by session id, then by the payment-row id we set
-        # as client_reference_id / metadata.payment_id. The row is agency-scoped,
-        # so attribution to the paying agency is already recorded on it.
+        # One-time payment completed. Match the payment row by session id, then
+        # by the payment-row id we set as client_reference_id / metadata.payment_id.
+        # The row is agency-scoped, so attribution is already recorded on it.
         meta = obj.get("metadata") or {}
         payment = (_find_payment(session_id=obj.get("id"))
                    or _find_payment_by_id(obj.get("client_reference_id") or meta.get("payment_id")))
         if payment:
-            at.update(at.TableNames.PAYMENTS, payment["id"], {
-                "status": "succeeded" if obj.get("payment_status") == "paid" else "processing",
-                "stripe_payment_intent_id": obj.get("payment_intent"),
-                "stripe_customer_id": obj.get("customer"),
-            })
+            pf = payment.get("fields", {})
+            is_takeon_intent = bool((pf.get("metadata") or {}).get("takeon_payload"))
+            if is_takeon_intent and obj.get("payment_status") == "paid":
+                # Pay-first take-on: this payment *bought* a property that
+                # doesn't exist yet — fulfil it now (CAS makes this safe
+                # against the success-page poller doing the same).
+                from app.services import billing  # noqa: PLC0415 — avoid load cycle
+                await billing.mark_paid_and_fulfill(payment)
+                at.update(at.TableNames.PAYMENTS, payment["id"], {
+                    "stripe_payment_intent_id": obj.get("payment_intent"),
+                })
+            else:
+                at.update(at.TableNames.PAYMENTS, payment["id"], {
+                    "status": "succeeded" if obj.get("payment_status") == "paid" else "processing",
+                    "stripe_payment_intent_id": obj.get("payment_intent"),
+                    "stripe_customer_id": obj.get("customer"),
+                })
             handled = True
     elif etype == "checkout.session.expired":
         payment = _find_payment(session_id=obj.get("id"))

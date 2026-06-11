@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { BackLink } from "../../components/ui/BackLink";
 import { Field, Section } from "../../components/ui/Field";
@@ -23,6 +23,21 @@ export default function PropertyTakeon() {
   const [serverError, setServerError] = useState<string | null>(null);
   const nav = useNavigate();
 
+  // Pay-first: if the agent abandoned a previous checkout, Stripe sends them
+  // back here with ?payment=cancelled&payment_id=… — nothing was created.
+  // While the session is still payable (~24h) we offer to resume it.
+  const [search] = useSearchParams();
+  const cancelled = search.get("payment") === "cancelled";
+  const cancelledPaymentId = search.get("payment_id");
+  const [resumeUrl, setResumeUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (cancelled && cancelledPaymentId) {
+      api.get(`/api/forms/takeon-status/${cancelledPaymentId}`)
+        .then((r) => { if (r.data.status === "pending") setResumeUrl(r.data.checkout_url); })
+        .catch(() => undefined);
+    }
+  }, [cancelled, cancelledPaymentId]);
+
   async function onSubmit(values: FormValues) {
     setServerError(null);
     try {
@@ -30,11 +45,11 @@ export default function PropertyTakeon() {
         ...values,
         asking_rent_pcm: values.asking_rent_pcm ? Number(values.asking_rent_pcm) : undefined,
       });
-      // When billing is on, the backend returns a Stripe Checkout URL for the
-      // one-time £50 new-tenancy fee — send the agent there to pay. On success
-      // Stripe returns them to the property page (?payment=success). When
-      // billing is off (dev) checkout_url is null and we go straight there.
-      if (data.checkout_url) {
+      // Pay-first: with billing on, nothing exists yet — the backend stored
+      // the form as an intent and we go to Stripe. The property is created
+      // only after payment confirms (TakeonComplete polls for it). With
+      // billing off (dev), the property is created immediately.
+      if (data.payment_required && data.checkout_url) {
         window.location.assign(data.checkout_url);
         return;
       }
@@ -52,10 +67,24 @@ export default function PropertyTakeon() {
         <div className="kicker mt-2">Stage 1 · Property take-on</div>
         <h1 className="mt-1">New property</h1>
         <p className="mt-3 text-ink-soft max-w-2xl">
-          Creates the property and landlord stub, then emails the landlord a link to the admin form.
-          A one-time £50 setup fee is collected via Stripe when you create the tenancy.
+          You'll pay the one-time £50 setup fee via Stripe first; the property and landlord
+          records are created (and the landlord emailed) the moment payment confirms.
         </p>
       </header>
+
+      {cancelled && (
+        <div className="card p-4 bg-amber-50 border-amber-200 text-amber-800 flex flex-wrap items-center justify-between gap-3">
+          <span className="text-sm">
+            Payment was cancelled — <strong>no property was created</strong> and nothing was charged.
+          </span>
+          {resumeUrl && (
+            <button type="button" className="btn-primary text-sm"
+              onClick={() => window.location.assign(resumeUrl)}>
+              Resume payment
+            </button>
+          )}
+        </div>
+      )}
 
       <Section title="Property">
         <Field label="Property address" required error={errors.address?.message}>

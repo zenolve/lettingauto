@@ -29,6 +29,10 @@ from app.db import supabase_client as at
 logger = get_logger(__name__)
 
 
+class BillingUnavailable(Exception):
+    """Stripe couldn't create the checkout — surface as 502 to the caller."""
+
+
 def billing_enabled() -> bool:
     return bool(settings.stripe_secret_key)
 
@@ -61,26 +65,39 @@ def ensure_customer(agency_id: str) -> str:
     return customer["id"]
 
 
-def start_tenancy_checkout(agency_id: str, property_id: str, address: str) -> Optional[dict]:
-    """Create the one-time £50 Checkout Session for a new tenancy.
+# ---------------------------------------------------------------------------
+# Pay-first take-on (deferred fulfillment)
+#
+# Nothing is created in the pipeline until the £50 clears:
+#   1. ``create_takeon_intent`` snapshots the validated take-on payload onto a
+#      pending payments row (the "intent") and opens a Checkout Session.
+#   2. ``mark_paid_and_fulfill`` runs from BOTH the Stripe webhook and the
+#      success-redirect poller; a compare-and-set on the payment's status
+#      (pending → succeeded) guarantees exactly one of them creates the
+#      property. The loser just reads the winner's result.
+# ---------------------------------------------------------------------------
+def create_takeon_intent(agency_id: str, payload: dict) -> Optional[dict]:
+    """Store the take-on payload as a pending intent + open the £50 checkout.
 
-    Returns ``{checkout_url, payment_id, session_id}``, or ``None`` when billing
-    is disabled (no Stripe key) or the session couldn't be created.
+    Returns ``{payment_id, checkout_url}``; ``None`` when billing is disabled
+    (caller should fulfil immediately). Raises on Stripe failure — with
+    pay-first there is nothing to salvage, the agent simply retries.
     """
     if not billing_enabled():
         return None
     fee = settings.stripe_tenancy_setup_fee_pence
+    address = (payload.get("address") or "").strip()
     description = (f"New tenancy setup fee — {address}").strip(" —") or "New tenancy setup fee"
 
-    # Pending payment row. Created under the agency's scope, so the adapter
-    # stamps agency_id automatically — that's our attribution.
+    # The intent: a pending payment row carrying the form payload. Created
+    # under the agency's scope, so agency_id is stamped automatically.
     payment = at.create(at.TableNames.PAYMENTS, {
-        "property_id": property_id,
         "payment_type": "tenancy_setup_fee",
         "amount": fee / 100.0,
         "currency": settings.stripe_currency,
         "status": "pending",
         "description": description,
+        "metadata": {"takeon_payload": payload},
     })
 
     stripe = _stripe()
@@ -98,25 +115,95 @@ def start_tenancy_checkout(agency_id: str, property_id: str, address: str) -> Op
                 },
                 "quantity": 1,
             }],
-            success_url=f"{base}/agent/properties/{property_id}?payment=success",
-            cancel_url=f"{base}/agent/properties/{property_id}?payment=cancelled",
+            success_url=f"{base}/agent/takeon/complete?payment={payment['id']}",
+            cancel_url=f"{base}/agent/properties/new?payment=cancelled&payment_id={payment['id']}",
             client_reference_id=payment["id"],
             metadata={"payment_id": payment["id"], "agency_id": agency_id,
-                      "property_id": property_id, "kind": "tenancy_setup"},
+                      "kind": "tenancy_setup"},
         )
-    except Exception as e:  # noqa: BLE001 — keep the row for audit, don't break take-on
+    except Exception as e:  # noqa: BLE001
         at.update(at.TableNames.PAYMENTS, payment["id"],
                   {"status": "failed", "description": f"{description} (Stripe error: {e})"})
-        logger.error("billing.tenancy_checkout_failed agency=%s err=%s", agency_id, e)
-        return None
+        logger.error("billing.takeon_intent_failed agency=%s err=%s", agency_id, e)
+        raise BillingUnavailable(f"Could not start the Stripe checkout: {e}") from e
 
     at.update(at.TableNames.PAYMENTS, payment["id"], {
         "stripe_checkout_session_id": session["id"],
         "stripe_customer_id": customer_id,
+        # Stored so an abandoned checkout can be resumed from the form page
+        # (sessions stay payable for 24h).
+        "metadata": {"takeon_payload": payload, "checkout_url": session["url"]},
     })
-    logger.info("billing.tenancy_checkout agency=%s property=%s session=%s",
-                agency_id, property_id, session["id"])
-    return {"checkout_url": session["url"], "payment_id": payment["id"], "session_id": session["id"]}
+    logger.info("billing.takeon_intent agency=%s payment=%s session=%s",
+                agency_id, payment["id"], session["id"])
+    return {"payment_id": payment["id"], "checkout_url": session["url"]}
+
+
+async def mark_paid_and_fulfill(payment: dict) -> Optional[str]:
+    """Idempotent fulfillment: flip the intent to paid and create the property.
+
+    Called from the webhook AND the status poller. The status CAS
+    (pending → succeeded) makes fulfillment exactly-once: only the winner runs
+    ``handle_takeon``. Returns the property_id (winner), the already-linked
+    property_id (loser/late call), or None if the row wasn't pending.
+    """
+    pid = payment["id"]
+    f = payment.get("fields", {})
+    existing = f.get("property_id")
+    if existing:
+        return existing
+
+    won = at.try_transition(at.TableNames.PAYMENTS, pid, "status", "pending", "succeeded")
+    if not won:
+        # Someone else is fulfilling (or already has) — report their result.
+        try:
+            return at.get(at.TableNames.PAYMENTS, pid, fresh=True).get("fields", {}).get("property_id")
+        except Exception:  # noqa: BLE001
+            return None
+
+    payload = (f.get("metadata") or {}).get("takeon_payload")
+    if not payload:
+        logger.error("billing.fulfill_no_payload payment=%s", pid)
+        return None
+
+    # Fulfil under the intent's agency scope so every row the handler writes
+    # is isolated + branded correctly (the webhook runs unscoped).
+    from app.handlers.pg01_takeon import handle_takeon  # noqa: PLC0415 — avoid load cycle
+    from app.models.common import PropertyTakeonInput  # noqa: PLC0415
+    scope = at.set_agency_scope(f.get("agency_id"))
+    try:
+        result = await handle_takeon(PropertyTakeonInput(**payload))
+        property_id = result["property_id"]
+        at.update(at.TableNames.PAYMENTS, pid, {"property_id": property_id})
+        logger.info("billing.fulfilled payment=%s property=%s", pid, property_id)
+        return property_id
+    except Exception as e:  # noqa: BLE001 — money taken but fulfillment failed:
+        # keep status=succeeded (true: they paid), flag the error for the
+        # status endpoint / support. The poller surfaces it to the agent.
+        logger.error("billing.fulfill_failed payment=%s err=%s", pid, e)
+        try:
+            meta = dict(f.get("metadata") or {})
+            meta["fulfillment_error"] = str(e)[:300]
+            at.update(at.TableNames.PAYMENTS, pid, {"metadata": meta})
+        except Exception:  # noqa: BLE001
+            pass
+        return None
+    finally:
+        at.reset_agency_scope(scope)
+
+
+def verify_session_paid(payment: dict) -> bool:
+    """Ask Stripe whether the intent's Checkout Session is actually paid —
+    used by the success-redirect poller so we never trust the URL alone."""
+    sid = payment.get("fields", {}).get("stripe_checkout_session_id")
+    if not (billing_enabled() and sid):
+        return False
+    try:
+        session = _stripe().checkout.Session.retrieve(sid)
+        return session.get("payment_status") == "paid"
+    except Exception as e:  # noqa: BLE001
+        logger.warning("billing.verify_session_failed payment=%s err=%s", payment.get("id"), e)
+        return False
 
 
 def billing_summary(agency_id: str) -> dict[str, Any]:

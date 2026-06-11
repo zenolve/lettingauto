@@ -84,15 +84,22 @@ STRIPE_TENANCY_SETUP_FEE_PENCE=5000   # £50.00
 STRIPE_CURRENCY=gbp
 ```
 
-**How it behaves:** an agent starts a new tenancy (take-on) → the backend
-creates a pending `payments` row (agency-scoped, so it carries `agency_id`)
-and a one-time £50 Checkout Session, returning its hosted URL → the frontend
-redirects the agent to Stripe to pay → the `checkout.session.completed`
-webhook flips that payment row to `succeeded`. The payment-row id rides along
-as both the session `metadata.payment_id` and `client_reference_id`, so the
-webhook can match it either way, and because the row is agency-scoped you
-always know which agency paid. With no Stripe keys configured, billing is
-disabled and take-on proceeds free (dev mode).
+**How it behaves (pay-first, deferred fulfillment):** when an agent submits
+the new-property form, **nothing is created yet** — the validated form payload
+is stored as a pending intent on a `payments` row (agency-scoped, so it
+carries `agency_id`) and the agent is redirected to a one-time £50 Checkout
+Session. The property (and landlord, emails, gate) is created **only when the
+payment confirms** — by the `checkout.session.completed` webhook or by the
+success page's status poller (which verifies with Stripe server-side),
+whichever lands first; a database compare-and-set makes fulfillment
+exactly-once, so a duplicate webhook can never create a second property.
+Abandoning checkout (back button / closed tab) leaves nothing behind — the
+intent stays resumable for ~24h ("Resume payment" on the form page) and is
+marked cancelled when the session expires. The payment-row id rides on the
+session as both `metadata.payment_id` and `client_reference_id`, so
+attribution to the paying agency is automatic. With no Stripe keys
+configured, billing is disabled and take-on creates the property immediately
+(dev mode).
 
 ---
 

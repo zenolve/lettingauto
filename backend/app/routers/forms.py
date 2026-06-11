@@ -37,9 +37,71 @@ async def submit_property_takeon(
     payload: PropertyTakeonInput,
     _: Agent = Depends(require_agent),
 ) -> dict:
-    # Take-on creates the property and returns a `checkout_url` for the one-time
-    # £50 fee (when billing is on); the frontend redirects the agent to pay.
-    return await handle_takeon(payload)
+    """Pay-first take-on.
+
+    With billing enabled, NOTHING is created yet: the validated payload is
+    stored as a pending intent and the agent is sent to Stripe
+    (``payment_required: true`` + ``checkout_url``). The property is created
+    only when payment confirms — by the Stripe webhook or the success-page
+    poller, whichever lands first (exactly-once via a status CAS).
+    With billing disabled (dev), the property is created immediately.
+    """
+    from app.db import supabase_client as at  # noqa: PLC0415
+    from app.services import billing  # noqa: PLC0415
+
+    if billing.billing_enabled() and at.current_agency_id():
+        try:
+            intent = billing.create_takeon_intent(
+                at.current_agency_id(), payload.model_dump(mode="json"),
+            )
+        except billing.BillingUnavailable as e:
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(e))
+        if intent:
+            return {"payment_required": True, **intent}
+
+    result = await handle_takeon(payload)
+    return {"payment_required": False, **result}
+
+
+@router.get("/takeon-status/{payment_id}")
+async def takeon_status(
+    payment_id: str,
+    _: Agent = Depends(require_agent),
+) -> dict:
+    """Success-page poller for a pay-first take-on intent.
+
+    Verifies payment with Stripe server-side (never trusts the redirect URL)
+    and triggers fulfillment if the webhook hasn't already — the CAS inside
+    ``mark_paid_and_fulfill`` keeps this race-safe.
+    """
+    from app.db import supabase_client as at  # noqa: PLC0415
+    from app.services import billing  # noqa: PLC0415
+
+    try:
+        payment = at.get(at.TableNames.PAYMENTS, payment_id, fresh=True)  # agency-scoped
+    except Exception:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Unknown take-on payment")
+    f = payment.get("fields", {})
+
+    pay_status = f.get("status")
+    property_id = f.get("property_id")
+
+    # Webhook may not have arrived yet — ask Stripe directly and fulfil here.
+    if pay_status == "pending" and billing.verify_session_paid(payment):
+        property_id = await billing.mark_paid_and_fulfill(payment)
+        pay_status = "succeeded"
+
+    meta = f.get("metadata") or {}
+    return {
+        "payment_id": payment_id,
+        "status": pay_status,                       # pending | succeeded | cancelled | failed
+        "fulfilled": bool(property_id),
+        "property_id": property_id,
+        # While pending the agent can resume the same checkout (sessions stay
+        # payable for ~24h) instead of re-entering the form.
+        "checkout_url": meta.get("checkout_url") if pay_status == "pending" else None,
+        "fulfillment_error": meta.get("fulfillment_error"),
+    }
 
 
 def _derive_current_stage_for_check(property_id: str) -> int:

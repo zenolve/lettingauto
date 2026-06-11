@@ -100,24 +100,14 @@ async def handle_takeon(payload: PropertyTakeonInput) -> dict:
     # 6. Gate check â€” should pass immediately (landlord just linked)
     gate = await evaluate_gate(property_id, target_stage=2)
 
-    # 7. Commercial billing: the one-time GBP 50 new-tenancy fee. Creates a
-    #    pending payment row + a Stripe Checkout Session; the frontend redirects
-    #    the agent to `checkout_url` to pay. No-op (None) when Stripe isn't
-    #    configured or there's no agency scope (e.g. dev / legacy webhooks).
-    checkout_url: str | None = None
-    if at.current_agency_id():
-        try:
-            from app.services import billing  # noqa: PLC0415 - avoid load cycle
-            res = billing.start_tenancy_checkout(at.current_agency_id(), property_id, payload.address)
-            if res:
-                checkout_url = res["checkout_url"]
-        except Exception as e:  # noqa: BLE001 - billing must never break take-on
-            logger.warning("takeon.checkout_failed property=%s err=%s", property_id, e)
-
+    # NOTE (billing): with pay-first take-on, the GBP 50 fee is collected
+    # BEFORE this handler runs â€” the forms router stores the payload as a
+    # pending intent and only calls handle_takeon once Stripe confirms payment
+    # (services/billing.mark_paid_and_fulfill). This function itself is
+    # payment-agnostic.
     return {
         "property_id": property_id,
         "landlord_id": landlord_record["id"],
         "tenancy_type": tenancy_type,
         "gate": gate.to_dict(),
-        "checkout_url": checkout_url,
     }

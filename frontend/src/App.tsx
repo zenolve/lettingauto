@@ -20,6 +20,7 @@ import PropertyUploads from "./pages/PropertyUploads";
 import RegisterAgency from "./pages/RegisterAgency";
 import Settings from "./pages/Settings";
 import Signatures from "./pages/Signatures";
+import TakeonComplete from "./pages/TakeonComplete";
 import TemplateEditor from "./pages/TemplateEditor";
 
 export default function App() {
@@ -46,6 +47,7 @@ export default function App() {
         <Route path="/agent/library" element={<LibraryIndex />} />
         <Route path="/agent/library/:docId" element={<TemplateEditor />} />
         <Route path="/agent/properties/new" element={<PropertyTakeon />} />
+        <Route path="/agent/takeon/complete" element={<TakeonComplete />} />
         <Route path="/agent/properties/:id" element={<PropertyDetail />} />
         <Route path="/agent/properties/:id/uploads" element={<PropertyUploads />} />
         <Route path="/agent/properties/:id/offer" element={<Offer />} />
