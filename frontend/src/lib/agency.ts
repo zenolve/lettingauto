@@ -18,10 +18,9 @@ export type AgencyMe = {
   membership: { email: string; name: string; role: string };
   billing: {
     enabled: boolean;
-    payment_method_on_file: boolean;
-    subscription_status: string;
-    live_tenancies: number;
-    pricing: { tenancy_setup_fee: number; live_tenancy_monthly: number; currency: string };
+    pricing: { tenancy_setup_fee: number; currency: string };
+    tenancy_fees_paid: number;
+    tenancy_fees_pending: number;
   };
 };
 

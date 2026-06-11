@@ -57,45 +57,42 @@ fine to keep; users confirm then sign in.
 
 ---
 
-## 2. Stripe (agency billing + payments)
+## 2. Stripe (agency billing)
 
-Pricing model implemented: **£50 one-time per new tenancy** (charged at
-property take-on against the agency's saved card) + **£5/month per live
-tenancy** (one subscription per agency whose quantity tracks live tenancies).
+Pricing model implemented: a single **£50 one-time fee per new tenancy**,
+collected via a Stripe Checkout Session at property take-on. No subscription,
+no card-on-file.
 
-1. [dashboard.stripe.com](https://dashboard.stripe.com) → Products → **Add product**:
-   - Name: `Live tenancy` — Price: **£5.00 GBP, Recurring monthly**, *per unit*.
-   - Copy the price id (`price_…`) → `STRIPE_PRICE_LIVE_TENANCY`.
-   - (The £50 fee needs no product — it's created as an ad-hoc invoice item.)
-2. Developers → API keys → **Secret key** → `STRIPE_SECRET_KEY`.
-3. Developers → Webhooks → **Add endpoint**: `https://<your-api-domain>/webhook/stripe`
+1. [dashboard.stripe.com](https://dashboard.stripe.com) → Developers → API keys
+   → **Secret key** → `STRIPE_SECRET_KEY`. (No product to create — the £50
+   line item is built per Checkout Session.)
+2. Developers → Webhooks → **Add endpoint**: `https://<your-api-domain>/webhook/stripe`
    with events:
    - `checkout.session.completed`
    - `checkout.session.expired`
-   - `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`
-   - `invoice.payment_failed`
    - `payment_intent.payment_failed`
    - `charge.refunded`
    Copy the signing secret (`whsec_…`) → `STRIPE_WEBHOOK_SECRET`.
-4. Local testing: `stripe listen --forward-to localhost:8000/webhook/stripe`
+3. Local testing: `stripe listen --forward-to localhost:8000/webhook/stripe`
    (use the printed `whsec_…`).
 
 ```env
 # backend/.env
 STRIPE_SECRET_KEY=sk_live_…        # or sk_test_…
 STRIPE_WEBHOOK_SECRET=whsec_…
-STRIPE_PRICE_LIVE_TENANCY=price_…
-STRIPE_TENANCY_SETUP_FEE_PENCE=5000
+STRIPE_TENANCY_SETUP_FEE_PENCE=5000   # £50.00
 STRIPE_CURRENCY=gbp
 ```
 
-**How it behaves:** an agency adds a card in *Settings → Billing* (Stripe
-Checkout, setup mode) → the webhook stores the default payment method and
-starts the £5/unit subscription at quantity 0 → each take-on invoices £50
-immediately (failure blocks the take-on with HTTP 402) → the subscription
-quantity re-syncs whenever a tenancy goes live and nightly via the scheduler.
-With no Stripe keys configured, billing is disabled and everything is free
-(dev mode).
+**How it behaves:** an agent starts a new tenancy (take-on) → the backend
+creates a pending `payments` row (agency-scoped, so it carries `agency_id`)
+and a one-time £50 Checkout Session, returning its hosted URL → the frontend
+redirects the agent to Stripe to pay → the `checkout.session.completed`
+webhook flips that payment row to `succeeded`. The payment-row id rides along
+as both the session `metadata.payment_id` and `client_reference_id`, so the
+webhook can match it either way, and because the row is agency-scoped you
+always know which agency paid. With no Stripe keys configured, billing is
+disabled and take-on proceeds free (dev mode).
 
 ---
 
@@ -133,9 +130,10 @@ above and `ALLOW_BOOTSTRAP_LOGIN=false`.
 2. Four-slide onboarding modal (pipeline → compliance → e-sign/payments →
    pricing). Dismiss persists on the agency record.
 3. *Settings* → agency profile + document branding (colours drive contract
-   PDFs and emails) + *Billing* → **Add payment method**.
-4. *New property* → £50 charged → landlord receives the (agency-branded)
-   admin + verification forms → pipeline proceeds exactly as before.
+   PDFs and emails) + *Billing* (pricing summary; nothing to configure).
+4. *New property* → redirected to Stripe to pay the one-time £50 fee →
+   landlord receives the (agency-branded) admin + verification forms →
+   pipeline proceeds exactly as before.
 5. Tenants/landlords/property data are editable in-app: property page →
    **Edit records** (the Airtable replacement).
 
@@ -163,5 +161,5 @@ Three new self-contained drafts in `frontend/design-previews/`
 - **E — Bento Dark**: Linear-style dark theme, mono accents, bento feature grid.
 - **F — Editorial Mesh**: warm paper, oversized serif, pastel mesh gradients.
 
-All three carry the live pricing (£50 + £5/mo). Pick one and it becomes the
-public site / logged-out root.
+All three carry the live pricing (£50 one-time per new tenancy). Pick one and
+it becomes the public site / logged-out root.

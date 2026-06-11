@@ -37,17 +37,9 @@ async def submit_property_takeon(
     payload: PropertyTakeonInput,
     _: Agent = Depends(require_agent),
 ) -> dict:
-    from app.services.billing import BillingError  # noqa: PLC0415
-    try:
-        return await handle_takeon(payload)
-    except BillingError as e:
-        # The £50 new-tenancy fee could not be charged — surface as Payment
-        # Required with a machine-readable code so the UI can route the agent
-        # to Settings → Billing.
-        raise HTTPException(
-            status.HTTP_402_PAYMENT_REQUIRED,
-            detail={"code": e.code, "message": str(e)},
-        )
+    # Take-on creates the property and returns a `checkout_url` for the one-time
+    # £50 fee (when billing is on); the frontend redirects the agent to pay.
+    return await handle_takeon(payload)
 
 
 def _derive_current_stage_for_check(property_id: str) -> int:

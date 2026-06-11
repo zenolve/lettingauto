@@ -65,15 +65,4 @@ async def run_scheduler(batch_size: int = 100) -> dict:
         finally:
             at.reset_agency_scope(scope)
 
-    # Daily billing reconciliation: keep every agency's GBP 5/month
-    # live-tenancy subscription quantity in step with reality (gate hooks
-    # update it too; this catches anything missed).
-    billing_synced = 0
-    try:
-        from app.services import billing  # noqa: PLC0415 - avoid load cycle
-        billing_synced = await billing.sync_all_agencies()
-    except Exception as e:  # noqa: BLE001
-        logger.warning("scheduler.billing_sync_failed err=%s", e)
-
-    return {"fired": fired, "skipped": skipped, "checked": len(rows),
-            "billing_synced": billing_synced}
+    return {"fired": fired, "skipped": skipped, "checked": len(rows)}

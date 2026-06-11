@@ -30,6 +30,14 @@ export default function PropertyTakeon() {
         ...values,
         asking_rent_pcm: values.asking_rent_pcm ? Number(values.asking_rent_pcm) : undefined,
       });
+      // When billing is on, the backend returns a Stripe Checkout URL for the
+      // one-time £50 new-tenancy fee — send the agent there to pay. On success
+      // Stripe returns them to the property page (?payment=success). When
+      // billing is off (dev) checkout_url is null and we go straight there.
+      if (data.checkout_url) {
+        window.location.assign(data.checkout_url);
+        return;
+      }
       nav(`/agent/properties/${data.property_id}`);
     } catch (e: any) {
       setServerError(e?.response?.data?.detail ?? "Submission failed");
@@ -45,6 +53,7 @@ export default function PropertyTakeon() {
         <h1 className="mt-1">New property</h1>
         <p className="mt-3 text-ink-soft max-w-2xl">
           Creates the property and landlord stub, then emails the landlord a link to the admin form.
+          A one-time £50 setup fee is collected via Stripe when you create the tenancy.
         </p>
       </header>
 

@@ -54,34 +54,6 @@ export default function Settings() {
     }
   }
 
-  async function addPaymentMethod() {
-    setErr(null);
-    try {
-      const { data } = await api.post("/api/agencies/me/billing/setup-checkout");
-      window.location.assign(data.checkout_url);
-    } catch (e: any) {
-      const detail = e?.response?.data?.detail;
-      setErr(typeof detail === "string" ? detail : "Could not open Stripe checkout");
-    }
-  }
-
-  async function syncBilling() {
-    try {
-      await api.post("/api/agencies/me/billing/sync");
-      await load(true);
-      setMsg("Billing synced.");
-    } catch {
-      setErr("Sync failed");
-    }
-  }
-
-  const statusTone: Record<string, string> = {
-    active: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    past_due: "bg-rose-50 text-rose-700 border-rose-200",
-    canceled: "bg-rose-50 text-rose-700 border-rose-200",
-    none: "bg-cream-100 text-ink-muted border-cream-300",
-  };
-
   return (
     <div className="max-w-3xl space-y-8">
       <header>
@@ -167,12 +139,11 @@ export default function Settings() {
 
       {/* ---- Billing ---- */}
       <section className="card p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="font-serif text-xl text-navy-700">Billing</h2>
-          <span className={`text-xs px-2.5 py-1 rounded-full border ${statusTone[billing.subscription_status] ?? statusTone.none}`}>
-            {billing.subscription_status === "none" ? "not set up" : billing.subscription_status}
-          </span>
-        </div>
+        <h2 className="font-serif text-xl text-navy-700">Billing</h2>
+        <p className="text-sm text-ink-muted -mt-2">
+          Simple, usage-based pricing — a one-time fee per new tenancy, collected via Stripe
+          when you create the tenancy. No subscription, no card kept on file.
+        </p>
 
         <div className="grid grid-cols-3 gap-4 text-center">
           <div className="rounded-md border border-cream-300 p-4">
@@ -180,12 +151,12 @@ export default function Settings() {
             <div className="text-xs text-ink-muted mt-1">one-time per new tenancy</div>
           </div>
           <div className="rounded-md border border-cream-300 p-4">
-            <div className="text-2xl font-serif text-navy-700">£{billing.pricing.live_tenancy_monthly}/mo</div>
-            <div className="text-xs text-ink-muted mt-1">per live tenancy</div>
+            <div className="text-2xl font-serif text-navy-700">{billing.tenancy_fees_paid}</div>
+            <div className="text-xs text-ink-muted mt-1">tenancy fees paid</div>
           </div>
           <div className="rounded-md border border-cream-300 p-4">
-            <div className="text-2xl font-serif text-navy-700">{billing.live_tenancies}</div>
-            <div className="text-xs text-ink-muted mt-1">live tenancies now</div>
+            <div className="text-2xl font-serif text-navy-700">{billing.tenancy_fees_pending}</div>
+            <div className="text-xs text-ink-muted mt-1">awaiting payment</div>
           </div>
         </div>
 
@@ -194,32 +165,11 @@ export default function Settings() {
             Billing is not configured on this server (no Stripe keys) — tenancy fees are
             skipped in this environment.
           </p>
-        ) : billing.payment_method_on_file ? (
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-emerald-700">✓ Payment method on file</span>
-            {canEdit && (
-              <div className="flex gap-2">
-                <button className="px-3 py-1.5 rounded-md border border-cream-400 hover:bg-cream-100 transition"
-                  onClick={addPaymentMethod}>
-                  Update card
-                </button>
-                <button className="px-3 py-1.5 rounded-md border border-cream-400 hover:bg-cream-100 transition"
-                  onClick={syncBilling}>
-                  Sync live-tenancy count
-                </button>
-              </div>
-            )}
-          </div>
         ) : (
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-ink-soft">
-              Add a card to start new tenancies — you'll be charged £{billing.pricing.tenancy_setup_fee}{" "}
-              per take-on and £{billing.pricing.live_tenancy_monthly}/month per live tenancy.
-            </p>
-            {canEdit && (
-              <button className="btn-primary" onClick={addPaymentMethod}>Add payment method</button>
-            )}
-          </div>
+          <p className="text-sm text-ink-soft">
+            When you create a new tenancy you'll be sent to Stripe to pay the £{billing.pricing.tenancy_setup_fee}{" "}
+            setup fee. Paid and outstanding fees are summarised above.
+          </p>
         )}
       </section>
     </div>

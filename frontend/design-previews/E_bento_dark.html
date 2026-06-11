@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LettingAuto — Variation E (Bento Dark)</title>
-<meta name="description" content="LettingAuto runs the entire UK tenancy workflow — nine gated stages, hard compliance checks, agency-branded e-signatures and per-tenancy pricing. £50 per new tenancy, £5 a month while it's live.">
+<meta name="description" content="LettingAuto runs the entire UK tenancy workflow — nine gated stages, hard compliance checks, agency-branded e-signatures and per-tenancy pricing. £50 one-time per new tenancy — no subscription, no seats.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -317,6 +317,8 @@
     background:linear-gradient(90deg,transparent,rgba(163,230,53,.55),transparent);
   }
   .price-grid{display:grid;grid-template-columns:1fr 1px 1fr;align-items:stretch;margin-top:40px}
+  .price-solo{margin-top:40px;display:flex;justify-content:center}
+  .price-solo .price-cell{max-width:440px}
   .price-cell{padding:6px 30px}
   .price-div{background:var(--border)}
   .price-tag{
@@ -610,22 +612,16 @@
   <div class="container">
     <div class="sec-head center">
       <span class="kicker">Pricing</span>
-      <h2>Two numbers. No seats. No tiers.</h2>
-      <p>Every feature, every user, every branch. The price only moves when your lettings book does.</p>
+      <h2>One number. No seats. No tiers.</h2>
+      <p>Every feature, every user, every branch. One flat fee per new tenancy — no subscription, ever.</p>
     </div>
 
     <div class="price-panel">
-      <div class="price-grid">
+      <div class="price-solo">
         <div class="price-cell">
           <div class="price-tag">One-time &middot; per new tenancy</div>
           <div class="price-val">&pound;50</div>
-          <p class="price-sub">Charged when a tenancy enters the pipeline. Covers forms, gates, referencing and signing, all the way to move&#8209;in.</p>
-        </div>
-        <div class="price-div" aria-hidden="true"></div>
-        <div class="price-cell">
-          <div class="price-tag">Monthly &middot; per live tenancy</div>
-          <div class="price-val">&pound;5<span class="unit">/mo</span></div>
-          <p class="price-sub">While the tenancy runs: compliance re&#8209;checks, expiry alerts and renewals. Stops the day it ends.</p>
+          <p class="price-sub">Charged once, when a tenancy enters the pipeline. Covers forms, gates, referencing, signing and every compliance re&#8209;check for the life of the tenancy — no subscription, no seats, ever.</p>
         </div>
       </div>
 
@@ -642,7 +638,7 @@
 
       <div class="price-cta">
         <a class="btn btn-primary" href="#">Get started</a>
-        <p class="price-fine">PRICES EXCLUDE VAT &middot; THE &pound;5/MONTH STOPS THE DAY A TENANCY ENDS &middot; NO CONTRACT, NO MINIMUM TERM</p>
+        <p class="price-fine">PRICES EXCLUDE VAT &middot; &pound;50 PER NEW TENANCY &middot; NO SUBSCRIPTION, NO SEATS &middot; NO CONTRACT, NO MINIMUM TERM</p>
       </div>
     </div>
   </div>

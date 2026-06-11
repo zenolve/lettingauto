@@ -50,10 +50,8 @@ class Settings(BaseSettings):
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
     stripe_currency: str = "gbp"
-    # Agency pricing: £50 one-time per new tenancy + £5/month per live tenancy.
-    # stripe_price_live_tenancy is a recurring per-unit Price id (£5/month);
-    # the subscription quantity tracks the agency's live tenancy count.
-    stripe_price_live_tenancy: str = ""
+    # Agency pricing: a single one-time £50 fee per new tenancy, collected via
+    # a Stripe Checkout Session at take-on (no subscription).
     stripe_tenancy_setup_fee_pence: int = 5000
 
     # --- SMTP ---------------------------------------------------------------

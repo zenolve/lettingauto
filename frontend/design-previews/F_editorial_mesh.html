@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LettingAuto — Variation F (Editorial Mesh)</title>
-<meta name="description" content="LettingAuto automates the entire tenancy workflow for UK letting agencies — compliance gates, branded e-signatures, referencing and Stripe payments. £50 one-time per new tenancy, £5/month per live tenancy.">
+<meta name="description" content="LettingAuto automates the entire tenancy workflow for UK letting agencies — compliance gates, branded e-signatures, referencing and Stripe payments. £50 per new tenancy. No subscription, no seats, cancel anytime.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=Inter:wght@400..700&display=swap" rel="stylesheet">
@@ -308,6 +308,7 @@ h1{font-size:clamp(2.7rem,5.3vw,4.5rem);margin:24px 0 22px}
   box-shadow:0 32px 72px rgba(26,26,24,.1),0 4px 14px rgba(26,26,24,.05);
   backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);
 }
+.solo{text-align:center;padding:6px 26px;max-width:520px;margin:0 auto}
 .duo{display:flex;align-items:stretch}
 .duo .col{flex:1;text-align:center;padding:6px 26px}
 .duo .vr{width:1px;background:var(--line);flex:none}
@@ -589,22 +590,14 @@ footer{border-top:1px solid var(--line);background:rgba(246,242,233,.65);padding
     <div class="p-head">
       <p class="kicker center">Pricing</p>
       <h2>Simple, usage-based pricing</h2>
-      <p class="p-sub">£50 one-time per new tenancy + £5/month per live tenancy. <b>No seats, no tiers, cancel anytime.</b></p>
+      <p class="p-sub">£50 one-time per new tenancy. <b>No subscription, no seats, cancel anytime.</b></p>
     </div>
 
     <div class="price-card">
-      <div class="duo">
-        <div class="col">
-          <p class="amount serif">£50</p>
-          <p class="per">one-time · per new tenancy</p>
-          <p class="per-note">covers everything from take-on to move-in</p>
-        </div>
-        <div class="vr" aria-hidden="true"></div>
-        <div class="col">
-          <p class="amount serif">£5</p>
-          <p class="per">per month · per live tenancy</p>
-          <p class="per-note">billing stops the month a tenancy ends</p>
-        </div>
+      <div class="solo">
+        <p class="amount serif">£50</p>
+        <p class="per">one-time · per new tenancy</p>
+        <p class="per-note">covers everything from take-on to move-in — no subscription, ever</p>
       </div>
 
       <ul class="includes">

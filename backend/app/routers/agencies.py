@@ -147,20 +147,6 @@ def patch_my_agency(body: dict[str, Any], agent: Agent = Depends(require_agent))
     return _me_payload(agent)
 
 
-@router.post("/me/billing/setup-checkout", status_code=status.HTTP_201_CREATED)
-def billing_setup_checkout(agent: Agent = Depends(require_agent)) -> dict[str, Any]:
-    if agent.role not in ("owner", "admin"):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only owners/admins manage billing")
-    try:
-        url = billing.create_setup_checkout(agent.agency_id)
-    except billing.BillingError as e:
-        code = status.HTTP_501_NOT_IMPLEMENTED if e.code == "billing_disabled" else status.HTTP_502_BAD_GATEWAY
-        raise HTTPException(code, str(e))
-    return {"checkout_url": url}
-
-
-@router.post("/me/billing/sync")
-def billing_sync(agent: Agent = Depends(require_agent)) -> dict[str, Any]:
-    count = billing.sync_live_tenancies(agent.agency_id)
-    return {"live_tenancies": billing.count_live_tenancies(agent.agency_id),
-            "synced": count is not None}
+# Billing is pay-as-you-go: the one-time £50 fee is collected via a Checkout
+# Session created at take-on (see handlers/pg01_takeon + services/billing).
+# There's no card-on-file or subscription to manage here.

@@ -14,7 +14,6 @@ export default function OnboardingModal() {
   if (!agency || agency.onboarding_completed || closing) return null;
 
   const fee = agency.billing?.pricing?.tenancy_setup_fee ?? 50;
-  const monthly = agency.billing?.pricing?.live_tenancy_monthly ?? 5;
 
   const slides: Slide[] = [
     {
@@ -37,9 +36,9 @@ export default function OnboardingModal() {
     },
     {
       kicker: "Simple pricing",
-      title: `£${fee} per new tenancy · £${monthly}/month per live tenancy`,
-      body: "No seats, no tiers. Add a card in Settings → Billing, then take on your first property — landlord forms, verification and referencing flow from there automatically.",
-      art: <PriceArt fee={fee} monthly={monthly} />,
+      title: `£${fee} per new tenancy — that's it`,
+      body: "No seats, no tiers, no subscription. You pay a one-time £" + fee + " fee via Stripe each time you start a new tenancy, then landlord forms, verification, referencing and signing all flow from there automatically.",
+      art: <PriceArt fee={fee} />,
     },
   ];
 
@@ -154,17 +153,12 @@ function SignArt() {
   );
 }
 
-function PriceArt({ fee, monthly }: { fee: number; monthly: number }) {
+function PriceArt({ fee }: { fee: number }) {
   return (
     <div className="relative flex items-center gap-5 text-white">
-      <div className="rounded-xl border border-white/40 bg-white/10 px-6 py-4 text-center">
-        <div className="text-3xl font-bold font-serif">£{fee}</div>
-        <div className="text-[11px] uppercase tracking-wider text-white/80 mt-1">per new tenancy</div>
-      </div>
-      <div className="text-2xl text-white/60 font-light">+</div>
-      <div className="rounded-xl border border-white/40 bg-white/10 px-6 py-4 text-center">
-        <div className="text-3xl font-bold font-serif">£{monthly}<span className="text-base font-normal">/mo</span></div>
-        <div className="text-[11px] uppercase tracking-wider text-white/80 mt-1">per live tenancy</div>
+      <div className="rounded-xl border border-white/40 bg-white/10 px-8 py-5 text-center">
+        <div className="text-4xl font-bold font-serif">£{fee}</div>
+        <div className="text-[11px] uppercase tracking-wider text-white/80 mt-1">one-time · per new tenancy</div>
       </div>
     </div>
   );

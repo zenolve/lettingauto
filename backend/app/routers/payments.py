@@ -148,6 +148,9 @@ def create_checkout(
 
 
 def _find_payment(session_id: str | None = None, intent_id: str | None = None) -> dict | None:
+    # The webhook runs unscoped (no agency in context), so these lookups span
+    # all agencies — correct for a Stripe callback. The matched row already
+    # carries its owning agency_id.
     if session_id:
         row = at.find_first(at.TableNames.PAYMENTS, at.eq("stripe_checkout_session_id", session_id))
         if row:
@@ -155,6 +158,17 @@ def _find_payment(session_id: str | None = None, intent_id: str | None = None) -
     if intent_id:
         return at.find_first(at.TableNames.PAYMENTS, at.eq("stripe_payment_intent_id", intent_id))
     return None
+
+
+def _find_payment_by_id(payment_id: str | None) -> dict | None:
+    """Look up a payment row by its id (carried as client_reference_id /
+    metadata.payment_id on the Checkout Session)."""
+    if not payment_id:
+        return None
+    try:
+        return at.get(at.TableNames.PAYMENTS, payment_id)
+    except Exception:  # noqa: BLE001
+        return None
 
 
 @router.post("/webhook/stripe")
@@ -184,33 +198,22 @@ async def stripe_webhook(
     etype = event.get("type", "")
     obj = (event.get("data") or {}).get("object") or {}
 
-    from app.services import billing  # noqa: PLC0415 — avoid load cycle
-
     handled = False
     if etype == "checkout.session.completed":
-        if obj.get("mode") == "setup":
-            # Agency added a card (Settings → Billing): set it as the default
-            # payment method and start the £5/live-tenancy subscription.
-            try:
-                billing.handle_setup_completed(obj)
-                handled = True
-            except Exception as e:  # noqa: BLE001
-                logger.error("stripe.setup_completed_failed err=%s", e)
-        else:
-            payment = _find_payment(session_id=obj.get("id"))
-            if payment:
-                at.update(at.TableNames.PAYMENTS, payment["id"], {
-                    "status": "succeeded" if obj.get("payment_status") == "paid" else "processing",
-                    "stripe_payment_intent_id": obj.get("payment_intent"),
-                    "stripe_customer_id": obj.get("customer"),
-                })
-                handled = True
-    elif etype in ("customer.subscription.updated", "customer.subscription.created"):
-        handled = billing.apply_subscription_status(obj.get("customer"), obj.get("status", "active"))
-    elif etype == "customer.subscription.deleted":
-        handled = billing.apply_subscription_status(obj.get("customer"), "canceled")
-    elif etype == "invoice.payment_failed":
-        handled = billing.apply_subscription_status(obj.get("customer"), "past_due")
+        # One-time payment completed (tenancy fee or any other Checkout Session).
+        # Match the payment row by session id, then by the payment-row id we set
+        # as client_reference_id / metadata.payment_id. The row is agency-scoped,
+        # so attribution to the paying agency is already recorded on it.
+        meta = obj.get("metadata") or {}
+        payment = (_find_payment(session_id=obj.get("id"))
+                   or _find_payment_by_id(obj.get("client_reference_id") or meta.get("payment_id")))
+        if payment:
+            at.update(at.TableNames.PAYMENTS, payment["id"], {
+                "status": "succeeded" if obj.get("payment_status") == "paid" else "processing",
+                "stripe_payment_intent_id": obj.get("payment_intent"),
+                "stripe_customer_id": obj.get("customer"),
+            })
+            handled = True
     elif etype == "checkout.session.expired":
         payment = _find_payment(session_id=obj.get("id"))
         if payment:

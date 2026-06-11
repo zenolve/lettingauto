@@ -2,7 +2,7 @@
 
 > **This branch (`supabase-stripe-integration`) is the commercial multi-agency
 > SaaS.** Agencies self-register (Supabase auth: email / Google / Microsoft),
-> pay via Stripe (£50 per new tenancy + £5/month per live tenancy), and every
+> pay via Stripe (a one-time £50 per new tenancy), and every
 > document/email carries their own branding. Full setup checklist:
 > **[docs/COMMERCIAL_SETUP.md](docs/COMMERCIAL_SETUP.md)**.
 > The `dev*` branches remain the single-tenant Palace Gate product.

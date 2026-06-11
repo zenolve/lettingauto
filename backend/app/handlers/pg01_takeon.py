@@ -24,19 +24,6 @@ logger = get_logger(__name__)
 
 
 async def handle_takeon(payload: PropertyTakeonInput) -> dict:
-    # Commercial billing gate: starting a new tenancy costs the agency a
-    # one-time GBP 50 fee, charged against the card on file BEFORE any records
-    # are created. BillingError propagates to the router -> HTTP 402. No-op
-    # when Stripe isn't configured (dev) or the request has no agency scope.
-    from app.services import billing  # noqa: PLC0415 - avoid load cycle
-    fee_payment_id: str | None = None
-    agency_id = at.current_agency_id()
-    if agency_id:
-        fee_payment_id = billing.charge_tenancy_setup_fee(
-            agency_id,
-            description=f"New tenancy setup fee - {payload.address}",
-        )
-
     # Annualise the rent based on the chosen frequency (Weekly Ã— 52 or
     # Monthly Ã— 12) â€” drives APT vs. Common Law classification per the
     # Housing Act 1988 Â£100k threshold.
@@ -68,13 +55,6 @@ async def handle_takeon(payload: PropertyTakeonInput) -> dict:
         property_fields["Stage"] = [stage_1_id]
     property_record = at.create(at.TableNames.PROPERTIES, property_fields)
     property_id = property_record["id"]
-
-    # Tie the setup-fee payment row (charged above) to the property it bought.
-    if fee_payment_id:
-        try:
-            at.update(at.TableNames.PAYMENTS, fee_payment_id, {"property_id": property_id})
-        except Exception as e:  # noqa: BLE001
-            logger.warning("takeon.fee_link_failed payment=%s err=%s", fee_payment_id, e)
 
     # 2. Create Landlord stub
     landlord_fields = {
@@ -120,9 +100,24 @@ async def handle_takeon(payload: PropertyTakeonInput) -> dict:
     # 6. Gate check â€” should pass immediately (landlord just linked)
     gate = await evaluate_gate(property_id, target_stage=2)
 
+    # 7. Commercial billing: the one-time GBP 50 new-tenancy fee. Creates a
+    #    pending payment row + a Stripe Checkout Session; the frontend redirects
+    #    the agent to `checkout_url` to pay. No-op (None) when Stripe isn't
+    #    configured or there's no agency scope (e.g. dev / legacy webhooks).
+    checkout_url: str | None = None
+    if at.current_agency_id():
+        try:
+            from app.services import billing  # noqa: PLC0415 - avoid load cycle
+            res = billing.start_tenancy_checkout(at.current_agency_id(), property_id, payload.address)
+            if res:
+                checkout_url = res["checkout_url"]
+        except Exception as e:  # noqa: BLE001 - billing must never break take-on
+            logger.warning("takeon.checkout_failed property=%s err=%s", property_id, e)
+
     return {
         "property_id": property_id,
         "landlord_id": landlord_record["id"],
         "tenancy_type": tenancy_type,
         "gate": gate.to_dict(),
+        "checkout_url": checkout_url,
     }
