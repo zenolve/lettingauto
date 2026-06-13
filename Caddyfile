@@ -3,6 +3,6 @@
 # auto-provisions and renews Let's Encrypt certificates via the HTTP-01
 # challenge, so DNS for this hostname MUST already resolve to the droplet
 # before Caddy first starts (otherwise issuance fails and it retries).
-portal.lettings.zenolve.com {
+portal.zenolve.com {
 	reverse_proxy web:80
 }
