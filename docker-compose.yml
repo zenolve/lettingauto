@@ -1,13 +1,16 @@
 # Production stack — what you run on the DigitalOcean droplet.
 #
 #   1. Create backend/.env from backend/.env.example and fill in real values
-#      (set APP_ENV=production and FRONTEND_BASE_URL=http://<your-domain-or-ip>).
+#      (set APP_ENV=production and FRONTEND_BASE_URL=https://<your-domain>).
 #   2. Put your DocuSign private key at backend/docusign_rsa.key.
 #   3. docker compose up -d --build
-#   4. App is served on port 80.  (See DEPLOY.md for domain + TLS.)
+#   4. Caddy serves HTTPS on 80/443 for the hostname in ./Caddyfile and
+#      reverse-proxies to nginx.  (See DEPLOY.md for domain + TLS.)
 #
-# nginx (the `web` service) serves the built frontend and proxies /api, /auth,
-# /uploads, /webhook, /internal, /docs to the backend over the internal network.
+# Request path: internet -> caddy (TLS, 80/443) -> web (nginx, serves the
+# built frontend + proxies /api,/auth,/uploads,/webhook,/internal,/docs) ->
+# backend (FastAPI :8000).  `web` and `backend` are internal-only now; Caddy
+# is the sole public entrypoint.
 services:
   backend:
     build:
@@ -29,9 +32,24 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
+    expose:
+      - "80"   # internal only; Caddy is the public entrypoint
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - web
     ports:
-      - "80:80"
+      - "80:80"     # ACME HTTP-01 challenge + HTTP->HTTPS redirect
+      - "443:443"   # public HTTPS
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data        # issued certs — MUST persist across rebuilds
+      - caddy_config:/config
 
 volumes:
   uploads:
   signatures:
+  caddy_data:
+  caddy_config:

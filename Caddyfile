@@ -1,0 +1,8 @@
+# Caddy reverse proxy — terminates HTTPS for the public domain and forwards
+# to the internal nginx `web` service over the compose network. Caddy
+# auto-provisions and renews Let's Encrypt certificates via the HTTP-01
+# challenge, so DNS for this hostname MUST already resolve to the droplet
+# before Caddy first starts (otherwise issuance fails and it retries).
+portal.lettings.zenolve.com {
+	reverse_proxy web:80
+}
