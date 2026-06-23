@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import { api } from "../lib/api";
 import { useAgency } from "../lib/agency";
+import { supabase, supabaseEnabled } from "../lib/supabase";
 
 /** Agency settings: profile, document branding, billing. */
 export default function Settings() {
@@ -15,6 +16,12 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+
+  // Change-password (Supabase email/password accounts)
+  const [pw, setPw] = useState({ current: "", next: "", confirm: "" });
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwMsg, setPwMsg] = useState<string | null>(null);
+  const [pwErr, setPwErr] = useState<string | null>(null);
 
   useEffect(() => {
     if (agency) {
@@ -51,6 +58,33 @@ export default function Settings() {
       setErr(typeof detail === "string" ? detail : "Save failed");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function changePassword() {
+    setPwMsg(null);
+    setPwErr(null);
+    if (pw.next.length < 8) { setPwErr("New password must be at least 8 characters."); return; }
+    if (pw.next !== pw.confirm) { setPwErr("New passwords don't match."); return; }
+    if (pw.next === pw.current) { setPwErr("New password must differ from the current one."); return; }
+    if (!supabase || !agency) { setPwErr("Password changes aren't available in this environment."); return; }
+    setPwSaving(true);
+    try {
+      // Re-verify the current password before allowing the change — updateUser
+      // alone would let anyone change it on an unattended logged-in session.
+      const { error: reauthErr } = await supabase.auth.signInWithPassword({
+        email: agency.membership.email,
+        password: pw.current,
+      });
+      if (reauthErr) { setPwErr("Current password is incorrect."); return; }
+      const { error } = await supabase.auth.updateUser({ password: pw.next });
+      if (error) { setPwErr(error.message || "Could not update password."); return; }
+      setPw({ current: "", next: "", confirm: "" });
+      setPwMsg("Password updated.");
+    } catch (e: any) {
+      setPwErr(e?.message || "Could not update password.");
+    } finally {
+      setPwSaving(false);
     }
   }
 
@@ -172,6 +206,40 @@ export default function Settings() {
           </p>
         )}
       </section>
+
+      {/* ---- Security: change password (Supabase email/password) ---- */}
+      {supabaseEnabled && (
+        <section className="card p-6 space-y-4">
+          <h2 className="font-serif text-xl text-navy-700">Security</h2>
+          <p className="text-sm text-ink-muted -mt-2">
+            Change the password for your account ({agency.membership.email}).
+          </p>
+          <div className="grid grid-cols-2 gap-4">
+            <label className="block col-span-2">
+              <span className="label mb-1.5">Current password</span>
+              <input className="input" type="password" autoComplete="current-password"
+                value={pw.current} onChange={(e) => setPw((p) => ({ ...p, current: e.target.value }))} />
+            </label>
+            <label className="block">
+              <span className="label mb-1.5">New password</span>
+              <input className="input" type="password" autoComplete="new-password" minLength={8}
+                value={pw.next} onChange={(e) => setPw((p) => ({ ...p, next: e.target.value }))} />
+            </label>
+            <label className="block">
+              <span className="label mb-1.5">Confirm new password</span>
+              <input className="input" type="password" autoComplete="new-password" minLength={8}
+                value={pw.confirm} onChange={(e) => setPw((p) => ({ ...p, confirm: e.target.value }))} />
+            </label>
+          </div>
+          <div className="flex items-center gap-3">
+            <button className="btn-primary px-6" onClick={changePassword} disabled={pwSaving}>
+              {pwSaving ? "Updating…" : "Update password"}
+            </button>
+            {pwMsg && <span className="text-sm text-emerald-700">{pwMsg}</span>}
+            {pwErr && <span className="text-sm text-rose-700">{pwErr}</span>}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
