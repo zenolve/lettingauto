@@ -5,6 +5,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { BackLink } from "../../components/ui/BackLink";
 import { Field, Section } from "../../components/ui/Field";
 import { api } from "../../lib/api";
+import { useAgency } from "../../lib/agency";
 
 type FormValues = {
   address: string;
@@ -14,14 +15,23 @@ type FormValues = {
   asking_rent_pcm: number;
   rent_frequency: "Monthly" | "Weekly";
   send_admin_form: boolean;
+  agent_email: string;
 };
 
 export default function PropertyTakeon() {
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const { register, handleSubmit, watch, setValue, formState: { errors, isSubmitting } } = useForm<FormValues>({
     defaultValues: { send_admin_form: true, rent_frequency: "Monthly" },
   });
   const [serverError, setServerError] = useState<string | null>(null);
   const nav = useNavigate();
+
+  // When "send to landlord" is off, the onboarding form goes to the agent.
+  // Default the recipient to the logged-in agent's email (editable in the form).
+  const agentEmail = useAgency((s) => s.agency?.membership.email);
+  const sendToLandlord = watch("send_admin_form");
+  useEffect(() => {
+    if (agentEmail) setValue("agent_email", agentEmail);
+  }, [agentEmail, setValue]);
 
   // Pay-first: if the agent abandoned a previous checkout, Stripe sends them
   // back here with ?payment=cancelled&payment_id=… — nothing was created.
@@ -114,12 +124,27 @@ export default function PropertyTakeon() {
             {...register("landlord_email", { required: "Email is required" })}
           />
         </Field>
-        <Field label="Send admin form?" hint="Email the landlord a link to complete onboarding">
+        <Field label="Send admin form to landlord?" hint="If off, we email the onboarding link to you (the agent) instead of the landlord">
           <label className="flex items-center gap-2">
             <input type="checkbox" {...register("send_admin_form")} />
-            <span className="text-sm">Yes, send now</span>
+            <span className="text-sm">Yes, email the landlord</span>
           </label>
         </Field>
+        {!sendToLandlord && (
+          <Field
+            label="Send onboarding form to"
+            hint="Defaults to your email. Change it to send the admin + verification links to a different address."
+            error={errors.agent_email?.message}
+          >
+            <input
+              className="input"
+              type="email"
+              {...register("agent_email", {
+                required: "An email is required when not sending to the landlord",
+              })}
+            />
+          </Field>
+        )}
       </Section>
 
       {serverError && <div className="card p-4 bg-rose-50 text-rose-700 border-rose-200">{serverError}</div>}

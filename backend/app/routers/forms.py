@@ -35,7 +35,7 @@ router = APIRouter(prefix="/api/forms", tags=["forms"])
 @router.post("/property-takeon", status_code=status.HTTP_201_CREATED)
 async def submit_property_takeon(
     payload: PropertyTakeonInput,
-    _: Agent = Depends(require_agent),
+    agent: Agent = Depends(require_agent),
 ) -> dict:
     """Pay-first take-on.
 
@@ -48,6 +48,13 @@ async def submit_property_takeon(
     """
     from app.db import supabase_client as at  # noqa: PLC0415
     from app.services import billing  # noqa: PLC0415
+
+    # When the form isn't going to the landlord, it goes to the agent. Default
+    # the recipient to the signed-in agent's email here (the only place we still
+    # have the authenticated identity — pay-first fulfillment runs later with no
+    # agent in scope), so it persists in the stored intent payload.
+    if not payload.send_admin_form and not payload.agent_email:
+        payload.agent_email = agent.email
 
     if billing.billing_enabled() and at.current_agency_id():
         try:

@@ -36,6 +36,10 @@ class PropertyTakeonInput(BaseModel):
     landlord_full_name: str
     landlord_email: EmailStr
     send_admin_form: bool = True
+    # Recipient for the onboarding form when send_admin_form is False. Defaults
+    # to the logged-in agent's email (set server-side in the forms router) so it
+    # survives into pay-first fulfillment; the agent may override it in the form.
+    agent_email: Optional[EmailStr] = None
     asking_rent_pcm: Optional[float] = None   # value of one rent payment (per frequency)
     rent_frequency: Literal["Monthly", "Weekly"] = "Monthly"
     notes: Optional[str] = None

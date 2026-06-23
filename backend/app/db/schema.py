@@ -120,6 +120,8 @@ SCHEMAS: dict[str, TableSchema] = {
             "Rent Frequency": Col("rent_frequency"),
             "Annual Rent ": Col("annual_rent", "number"),     # trailing space is real
             "landlord_email": Col("landlord_email"),
+            "Forms_Route_To_Agent": Col("forms_route_to_agent", "bool"),
+            "Agent_Forms_Email": Col("agent_forms_email"),
             "Service Level": Col("service_level"),
             "Property Type": Col("property_type"),
             "Gate Status": Col("gate_status"),

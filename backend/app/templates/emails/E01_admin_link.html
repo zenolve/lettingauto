@@ -2,8 +2,13 @@
 {% block title %}Welcome to {{ brand_name }}{% endblock %}
 {% block body %}
   <h2 style="margin:0 0 12px 0;color:{{ brand_navy }};font-size:20px;">Welcome to {{ brand_name }}</h2>
+  {% if for_agent %}
+  <p>The property at <strong>{{ property_address }}</strong> has been added. You chose to handle onboarding yourself rather than emailing the landlord.</p>
+  <p>Use the secure link below to complete the landlord admin form on their behalf — or forward this email to the landlord:</p>
+  {% else %}
   <p>Your property at <strong>{{ property_address }}</strong> has been added to our system.</p>
   <p>To continue, please complete the landlord admin form using the secure link below:</p>
+  {% endif %}
   <p style="margin:20px 0;">
     <a href="{{ form_url }}" style="background:{{ brand_navy }};color:#ffffff;text-decoration:none;
        padding:12px 22px;border-radius:6px;font-weight:600;display:inline-block;">

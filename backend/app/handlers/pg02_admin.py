@@ -175,7 +175,8 @@ async def handle_admin(property_id: str, payload: LandlordAdminInput) -> dict:
         },
     )
 
-    # 8. Send verification form link to landlord
+    # 8. Send verification form link — to the agent if onboarding was routed to
+    #    them at take-on (send_admin_form was off), otherwise to the landlord.
     token = create_form_token(FormTokenPayload(
         property_id=property_id,
         form="landlord_verification",
@@ -183,11 +184,21 @@ async def handle_admin(property_id: str, payload: LandlordAdminInput) -> dict:
         landlord_id=landlord_id,
     ))
     form_url = f"{settings.frontend_base_url}/landlord/verify?token={token}"
-    await send_verification_link(
-        payload.landlord_email,
-        property_address=property_address,
-        form_url=form_url,
-    )
+    _prop_fields = existing_prop.get("fields", {})
+    _agent_forms_email = _prop_fields.get("Agent_Forms_Email")
+    if _prop_fields.get("Forms_Route_To_Agent") and _agent_forms_email:
+        await send_verification_link(
+            _agent_forms_email,
+            property_address=property_address,
+            form_url=form_url,
+            for_agent=True,
+        )
+    else:
+        await send_verification_link(
+            payload.landlord_email,
+            property_address=property_address,
+            form_url=form_url,
+        )
 
     # 9. Gate check â€” PG_00 is the exit condition for stage 2. Logs any
     #    blockers (e.g. T&C not yet signed) to the agent.

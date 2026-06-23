@@ -48,6 +48,11 @@ async def handle_takeon(payload: PropertyTakeonInput) -> dict:
         "Rent Frequency": payload.rent_frequency,
         "landlord_email": payload.landlord_email,
         "Stage changed at": date.today().isoformat(),
+        # When the admin form isn't emailed to the landlord, onboarding is the
+        # agent's job — persist that so the later (no-auth) verification send
+        # routes to the agent too.
+        "Forms_Route_To_Agent": not payload.send_admin_form,
+        "Agent_Forms_Email": payload.agent_email,
     }
     if annual_rent is not None:
         property_fields["Annual Rent "] = annual_rent
@@ -82,19 +87,33 @@ async def handle_takeon(payload: PropertyTakeonInput) -> dict:
         "JSON Data": json.dumps(payload.model_dump(mode="json")),
     })
 
-    # 5. Send admin form link to landlord (internal route)
+    # 5. Send the admin form link — to the landlord, or (when the agent opted
+    #    to handle onboarding themselves) to the agent instead. The token still
+    #    binds to the landlord record; only the email recipient changes.
+    token = create_form_token(FormTokenPayload(
+        property_id=property_id,
+        form="landlord_admin",
+        email=payload.landlord_email,
+        landlord_id=landlord_record["id"],
+    ))
+    form_url = f"{settings.frontend_base_url}/landlord/admin?token={token}"
     if payload.send_admin_form:
-        token = create_form_token(FormTokenPayload(
-            property_id=property_id,
-            form="landlord_admin",
-            email=payload.landlord_email,
-            landlord_id=landlord_record["id"],
-        ))
-        form_url = f"{settings.frontend_base_url}/landlord/admin?token={token}"
         await send_admin_form_link(
             payload.landlord_email,
             property_address=payload.address,
             form_url=form_url,
+        )
+    elif payload.agent_email:
+        await send_admin_form_link(
+            payload.agent_email,
+            property_address=payload.address,
+            form_url=form_url,
+            for_agent=True,
+        )
+    else:
+        logger.warning(
+            "pg01.no_admin_form_recipient property=%s — box off and no agent email",
+            property_id,
         )
 
     # 6. Gate check â€” should pass immediately (landlord just linked)

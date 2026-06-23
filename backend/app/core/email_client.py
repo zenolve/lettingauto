@@ -111,32 +111,40 @@ async def send_email(
 # ---------------------------------------------------------------------------
 # High-level convenience wrappers — one per email ID in spec §8.2
 # ---------------------------------------------------------------------------
-async def send_admin_form_link(landlord_email: str, *, property_address: str, form_url: str) -> None:
+async def send_admin_form_link(
+    recipient_email: str, *, property_address: str, form_url: str, for_agent: bool = False,
+) -> None:
     from app.core.branding import get_brand  # local import — avoid cycles
     html = render(
         "E01_admin_link.html",
         property_address=property_address,
         form_url=form_url,
+        for_agent=for_agent,
     )
-    await send_email(
-        landlord_email,
-        subject=f"Welcome to {get_brand().name} — complete your property details",
-        html=html,
+    subject = (
+        f"Action needed — complete the landlord admin form for {property_address}"
+        if for_agent
+        else f"Welcome to {get_brand().name} — complete your property details"
     )
+    await send_email(recipient_email, subject=subject, html=html)
 
 
-async def send_verification_link(landlord_email: str, *, property_address: str, form_url: str) -> None:
+async def send_verification_link(
+    recipient_email: str, *, property_address: str, form_url: str, for_agent: bool = False,
+) -> None:
     from app.core.branding import get_brand  # local import — avoid cycles
     html = render(
         "E03_verification_link.html",
         property_address=property_address,
         form_url=form_url,
+        for_agent=for_agent,
     )
-    await send_email(
-        landlord_email,
-        subject=f"{get_brand().name} — verify your identity",
-        html=html,
+    subject = (
+        f"Action needed — verification documents for {property_address}"
+        if for_agent
+        else f"{get_brand().name} — verify your identity"
     )
+    await send_email(recipient_email, subject=subject, html=html)
 
 
 async def send_agent_summary(
