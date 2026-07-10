@@ -62,6 +62,12 @@ def inspect_form_token(token: str, form: str | None = None) -> dict:
     record was deleted we just return the bare token payload.
     """
     payload = decode_form_token(token, expected_form=form)
+    # Fail fast on links that outlived their property (deleted after the email
+    # went out) so the landlord sees a clear message on page load instead of a
+    # 500 after filling in the whole form. Same 410 as the submit endpoints.
+    if payload.property_id:
+        from app.routers.forms import ensure_form_property_exists  # noqa: PLC0415
+        ensure_form_property_exists(payload.property_id)
     out = payload.model_dump()
     # Surface the inviting agency's name so the public landlord forms address
     # the landlord as that agency (no platform branding leaks).

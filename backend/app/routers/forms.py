@@ -248,6 +248,27 @@ async def submit_rra_batch(_: Agent = Depends(require_agent)) -> dict:
 # ---------------------------------------------------------------------------
 # Public â€” token-protected
 # ---------------------------------------------------------------------------
+STALE_FORM_LINK_DETAIL = (
+    "This form link is no longer valid - the property it relates to has been "
+    "removed. Please ask your letting agency for a new link."
+)
+
+
+def ensure_form_property_exists(property_id: str) -> None:
+    """410 when a form link outlives its property.
+
+    Form tokens embed the property id at send time; if the agent later deletes
+    the property (cascade delete), the emailed link keeps working but any
+    submission would 500 deep inside the handler. Fail fast with a clear,
+    landlord-readable message instead.
+    """
+    from app.db import supabase_client as at  # noqa: PLC0415
+    try:
+        at.get(at.TableNames.PROPERTIES, property_id)
+    except KeyError:
+        raise HTTPException(status.HTTP_410_GONE, STALE_FORM_LINK_DETAIL)
+
+
 @router.post("/landlord-admin", status_code=status.HTTP_201_CREATED)
 async def submit_landlord_admin(
     payload: LandlordAdminInput,
@@ -260,6 +281,7 @@ async def submit_landlord_admin(
     from app.db import supabase_client as at  # noqa: PLC0415
     scope = at.set_agency_scope(tok.agency_id)
     try:
+        ensure_form_property_exists(tok.property_id)
         return await handle_admin(tok.property_id, payload)
     finally:
         at.reset_agency_scope(scope)
@@ -274,6 +296,7 @@ async def submit_landlord_verification(
     from app.db import supabase_client as at  # noqa: PLC0415
     scope = at.set_agency_scope(tok.agency_id)
     try:
+        ensure_form_property_exists(tok.property_id)
         return await handle_verification(tok.property_id, tok.email, payload)
     finally:
         at.reset_agency_scope(scope)
