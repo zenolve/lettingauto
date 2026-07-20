@@ -26,6 +26,20 @@ def _first(v: Any) -> str | None:
     return v[0] if isinstance(v, list) and v else None
 
 
+def _money(v: Any) -> str:
+    """Format a numeric amount as a pound value ("£1,500.00") for documents.
+
+    Empty/missing values stay "" (templates keep their [bracketed] blanks);
+    non-numeric values pass through unchanged.
+    """
+    if v is None or v == "":
+        return ""
+    try:
+        return f"£{float(v):,.2f}"
+    except (TypeError, ValueError):
+        return str(v)
+
+
 def _resolve_tenant(pf: dict) -> dict:
     """The property's tenant, or the latest offer's lead tenant pre-acceptance."""
     tid = _first(pf.get("Tenant"))
@@ -74,7 +88,7 @@ def build_merge_context(property_id: str) -> dict[str, Any]:
         "property_type": pf.get("Property Type", ""),
         "tenancy_type": pf.get("Tenancy Type", "Common Law"),
         "service_level": pf.get("Service Level", ""),
-        "annual_rent": pf.get("Annual Rent ", ""),
+        "annual_rent": _money(pf.get("Annual Rent ", "")),
         "rent_frequency": pf.get("Rent Frequency", ""),
         "epc_rating": pf.get("EPC Rating ", ""),
         "gas_cert_expiry": pf.get("Gas Certificates Expiry", ""),
@@ -112,9 +126,9 @@ def build_merge_context(property_id: str) -> dict[str, Any]:
         "tenancy_start_date": tenant.get("Start Date", "") or pf.get("Tenancy Start Date", ""),
         "tenancy_end_date": tenant.get("End Date", "") or "Periodic",
         "tenancy_term": tenant.get("Tenancy Term", ""),
-        "monthly_rent": tenant.get("Amount", ""),
-        "deposit_amount": tenant.get("Deposit Amount", "") or pf.get("Deposit", ""),
-        "holding_deposit": tenant.get("Holding_Deposit", ""),
+        "monthly_rent": _money(tenant.get("Amount", "")),
+        "deposit_amount": _money(tenant.get("Deposit Amount", "") or pf.get("Deposit", "")),
+        "holding_deposit": _money(tenant.get("Holding_Deposit", "")),
         "rent_in_advance_months": tenant.get("Rent_In_Advance_Months", ""),
         "break_clause": tenant.get("Break Clause", ""),
         "guarantor_name": tenant.get("Guarantor_Name", ""),

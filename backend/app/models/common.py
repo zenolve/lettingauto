@@ -1,6 +1,7 @@
 """Pydantic models used by both internal-form routers and webhook handlers."""
 from __future__ import annotations
 
+import re
 from datetime import date
 from typing import Literal, Optional
 
@@ -98,6 +99,28 @@ class LandlordAdminInput(BaseModel):
     sort_code: Optional[str] = None
     account_name: Optional[str] = None
     account_number: Optional[str] = None
+
+    @field_validator("sort_code")
+    @classmethod
+    def _validate_sort_code(cls, v: Optional[str]) -> Optional[str]:
+        """UK sort codes are exactly 6 digits. Normalise to NN-NN-NN."""
+        if v is None or not str(v).strip():
+            return None
+        digits = re.sub(r"\D", "", str(v))
+        if len(digits) != 6:
+            raise ValueError("Sort code must be exactly 6 digits (e.g. 12-34-56)")
+        return f"{digits[0:2]}-{digits[2:4]}-{digits[4:6]}"
+
+    @field_validator("account_number")
+    @classmethod
+    def _validate_account_number(cls, v: Optional[str]) -> Optional[str]:
+        """UK account numbers are exactly 8 digits."""
+        if v is None or not str(v).strip():
+            return None
+        digits = re.sub(r"\D", "", str(v))
+        if len(digits) != 8:
+            raise ValueError("Account number must be exactly 8 digits")
+        return digits
 
     # tax-agent (only when appoint_solicitor_for_tax = Yes — see conditional in form)
     tax_agent_address: Optional[str] = None

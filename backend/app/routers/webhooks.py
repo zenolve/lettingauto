@@ -65,7 +65,7 @@ def _to_float(v: Any) -> float | None:
     if v is None:
         return None
     try:
-        return float(str(v).replace(",", "").replace("Â£", ""))
+        return float(str(v).replace(",", "").replace("£", ""))
     except Exception:
         return None
 

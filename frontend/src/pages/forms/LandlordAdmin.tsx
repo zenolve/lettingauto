@@ -373,9 +373,27 @@ export default function LandlordAdmin() {
       <Section title="Bank details for rental payments">
         <Field label="Bank name"><input className="input" {...register("bank_name")} /></Field>
         <Field label="Bank address"><input className="input" {...register("bank_address")} /></Field>
-        <Field label="Sort code"><input className="input" {...register("sort_code")} /></Field>
+        <Field label="Sort code" hint="6 digits, e.g. 12-34-56" error={errors.sort_code?.message as string}>
+          <input
+            className="input"
+            inputMode="numeric"
+            {...register("sort_code", {
+              validate: (v) =>
+                !v || (v.replace(/\D/g, "").length === 6) || "Sort code must be exactly 6 digits",
+            })}
+          />
+        </Field>
         <Field label="Account name"><input className="input" {...register("account_name")} /></Field>
-        <Field label="Account number"><input className="input" {...register("account_number")} /></Field>
+        <Field label="Account number" hint="8 digits" error={errors.account_number?.message as string}>
+          <input
+            className="input"
+            inputMode="numeric"
+            {...register("account_number", {
+              validate: (v) =>
+                !v || (v.replace(/\D/g, "").length === 8) || "Account number must be exactly 8 digits",
+            })}
+          />
+        </Field>
       </Section>
 
       {/* ============================ Photos / inventory ================ */}

@@ -270,8 +270,8 @@ async def handle_offer(property_id: str, payload: OfferInput) -> dict:
                 prefill_fields={
                     "property_address": pfields.get("Address", ""),
                     "tenant_full_name": payload.tenant_full_name,
-                    "monthly_rent": f"Â£{payload.monthly_rent:,.2f}",
-                    "deposit_amount": f"Â£{payload.deposit_amount:,.2f}",
+                    "monthly_rent": f"£{payload.monthly_rent:,.2f}",
+                    "deposit_amount": f"£{payload.deposit_amount:,.2f}",
                     "start_date": payload.start_date.isoformat(),
                     "end_date": payload.end_date.isoformat() if payload.end_date else "Periodic",
                     "tenancy_term": payload.tenancy_term or "Periodic",
