@@ -284,7 +284,9 @@ class OfferInput(BaseModel):
     monthly_rent: float
     rent_frequency: Literal["Monthly", "Weekly"] = "Monthly"
     deposit_amount: float
-    holding_deposit: float
+    # Optional: a holding deposit is not always taken (UAT feedback). None =
+    # "none taken"; the APT one-week cap check only runs when a value is set.
+    holding_deposit: Optional[float] = None
     rent_in_advance_months: int = 0
     # Break clause is a currency field in Airtable (Tenant.Break Clause) —
     # interpreted as the break-clause activation fee in £. The form posts a

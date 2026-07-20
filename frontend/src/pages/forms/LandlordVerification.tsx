@@ -225,7 +225,10 @@ export default function LandlordVerification() {
       )}
 
       <Section title="Source of funds">
-        <Field label="Source of funds">
+        <Field
+          label="Source of funds"
+          hint="Part of the anti-money-laundering (AML) checks we must run on every landlord — select where the money used to purchase this property came from."
+        >
           <select className="input" {...register("source_of_funds")}>
             <option value="">—</option>
             {SOURCES.map((s) => <option key={s}>{s}</option>)}

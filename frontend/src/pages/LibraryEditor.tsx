@@ -265,7 +265,8 @@ export default function LibraryEditor() {
         {error && <div className="card p-4 bg-rose-50 border-rose-200 text-rose-700">{error}</div>}
       </div>
 
-      <aside className="space-y-4">
+      {/* Sticky on large screens — palette follows the user down long documents. */}
+      <aside className="space-y-4 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
         {/* --- Send mode --- */}
         <section className="card p-4">
           <h3 className="text-sm font-semibold text-slate-700 mb-2">How to send</h3>

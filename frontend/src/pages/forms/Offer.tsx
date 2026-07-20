@@ -56,6 +56,12 @@ export default function Offer() {
   const [serverError, setServerError] = useState<string | null>(null);
   const nav = useNavigate();
 
+  // APT properties are periodic by law (RRA 2025) — the end-date field is
+  // hidden for them so the offer can't be rejected by the APT gate after the
+  // agent has filled the whole form in.
+  const [tenancyType, setTenancyType] = useState<string | null>(null);
+  const isApt = tenancyType === "APT";
+
   // Default rent_frequency from whatever was captured at take-on (PG_01).
   // In practice the offer's frequency almost always matches; the agent can
   // still override here if it doesn't.
@@ -65,6 +71,7 @@ export default function Offer() {
       .then((r) => {
         const f = r.data?.fields?.["Rent Frequency"];
         if (f === "Monthly" || f === "Weekly") setValue("rent_frequency", f);
+        setTenancyType(r.data?.fields?.["Tenancy Type"] ?? null);
       })
       .catch(() => { /* non-fatal — falls back to the hard-coded default */ });
   }, [id, setValue]);
@@ -82,9 +89,17 @@ export default function Offer() {
     }
     body.monthly_rent = Number(v.monthly_rent);
     body.deposit_amount = Number(v.deposit_amount);
-    body.holding_deposit = Number(v.holding_deposit);
+    // Holding deposit is optional — omit entirely when blank rather than
+    // coercing to 0, so "none was taken" is stored as empty, not £0.00.
+    if (v.holding_deposit === undefined || v.holding_deposit === null || String(v.holding_deposit) === "") {
+      delete body.holding_deposit;
+    } else {
+      body.holding_deposit = Number(v.holding_deposit);
+    }
     body.rent_in_advance_months = Number(v.rent_in_advance_months);
     body.number_of_occupants = Number(v.number_of_occupants);
+    // Safety net: an APT offer is periodic — never submit an end date.
+    if (isApt) delete body.end_date;
     // Keep only fully-filled co-tenant rows — the backend CoTenantInput requires
     // name + email, so a blank/partial row would 422.
     const coTenants = (v.co_tenants ?? []).filter(
@@ -193,13 +208,21 @@ export default function Offer() {
         <Field label="Start date" required>
           <input className="input" type="date" {...register("start_date", { required: "Required" })} />
         </Field>
-        <Field label="End date" hint="Leave blank for APT/periodic">
-          <input className="input" type="date" {...register("end_date")} />
-        </Field>
+        {isApt ? (
+          <Field label="End date" hint="Assured periodic tenancies are open-ended under the Renters' Rights Act 2025 — no end date applies.">
+            <div className="rounded-lg border border-cream-300 bg-cream-100 px-3 py-2 text-sm text-ink-soft">
+              Periodic tenancy — runs month to month with no fixed end date.
+            </div>
+          </Field>
+        ) : (
+          <Field label="End date" hint="Leave blank for a periodic tenancy">
+            <input className="input" type="date" {...register("end_date")} />
+          </Field>
+        )}
         <Field label="Tenancy term (e.g. 12 months)">
           <input className="input" {...register("tenancy_term")} />
         </Field>
-        <Field label="Break clause fee (£)" hint="Optional fee charged if the tenant exercises a break clause. Leave blank if none.">
+        <Field label="Break clause fee (£)" hint="Optional fee (£) payable if the tenant activates a break clause — it appears in the tenancy agreement. Leave blank if the tenancy has no break clause.">
           <input className="input" type="number" step="0.01" {...register("break_clause", { valueAsNumber: true })} />
         </Field>
         <Field label="Renewal terms">
@@ -226,8 +249,8 @@ export default function Offer() {
         <Field label="Deposit amount (£)" required>
           <input className="input" type="number" step="0.01" {...register("deposit_amount", { required: "Required" })} />
         </Field>
-        <Field label="Holding deposit (£)" required>
-          <input className="input" type="number" step="0.01" {...register("holding_deposit", { required: "Required" })} />
+        <Field label="Holding deposit (£)" hint="Optional — leave blank if no holding deposit was taken. If one was, it can be at most 1 week's rent (Tenant Fees Act 2019).">
+          <input className="input" type="number" step="0.01" {...register("holding_deposit")} />
         </Field>
         <Field label="Rent in advance (months)">
           <input className="input" type="number" min={0} {...register("rent_in_advance_months")} />

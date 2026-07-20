@@ -95,7 +95,9 @@ export default function ContractEditorPage() {
         )}
       </div>
 
-      <aside className="space-y-4">
+      {/* Sticky on large screens so the merge-field palette follows the agent
+          down the (long) document instead of forcing scroll-ups (UAT feedback). */}
+      <aside className="space-y-4 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
         <section className="card p-4">
           <h3 className="text-sm font-semibold text-slate-700 mb-2">Signers</h3>
           {signers.map((s, i) => (

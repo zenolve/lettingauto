@@ -131,6 +131,7 @@ def build_merge_context(property_id: str) -> dict[str, Any]:
         "holding_deposit": _money(tenant.get("Holding_Deposit", "")),
         "rent_in_advance_months": tenant.get("Rent_In_Advance_Months", ""),
         "break_clause": tenant.get("Break Clause", ""),
+        "special_conditions": tenant.get("Special Condition", ""),
         "guarantor_name": tenant.get("Guarantor_Name", ""),
         "guarantor_email": tenant.get("Guarantor_Email", ""),
         "guarantor_address": tenant.get("Gurantor Address", ""),  # spelling per live schema
@@ -195,6 +196,7 @@ MERGE_FIELD_CATALOGUE: list[dict] = [
     {"group": "Tenant", "key": "holding_deposit", "label": "Holding deposit"},
     {"group": "Tenant", "key": "rent_in_advance_months", "label": "Rent in advance (months)"},
     {"group": "Tenant", "key": "break_clause", "label": "Break clause"},
+    {"group": "Tenant", "key": "special_conditions", "label": "Special conditions"},
     {"group": "Tenant", "key": "guarantor_name", "label": "Guarantor name"},
     {"group": "Tenant", "key": "guarantor_email", "label": "Guarantor email"},
     {"group": "Tenant", "key": "guarantor_address", "label": "Guarantor address"},
