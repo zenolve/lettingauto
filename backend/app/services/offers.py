@@ -3,7 +3,7 @@
 One ``Offers`` row = one tenant offer (joint applicants share a row). The
 offer is the lifecycle wrapper around ``Properties.Tenant``:
 
-- ``Properties.Tenant`` is set **only when an offer is accepted** â€” so multiple
+- ``Properties.Tenant`` is set **only when an offer is accepted** — so multiple
   competing Pending offers can coexist on a property without clobbering each
   other (the old behaviour overwrote the link on every new offer).
 - Accepting one offer supersedes the other Pending offers on that property.
@@ -130,7 +130,7 @@ async def accept_offer(offer_id: str, *, source: str = "manual") -> dict[str, An
     })
     _supersede_other_pending(property_id, keep_offer_id=offer_id)
 
-    from app.handlers.pg00_gate import evaluate_gate  # local â€” avoid load cycle
+    from app.handlers.pg00_gate import evaluate_gate  # local — avoid load cycle
     gate = await evaluate_gate(property_id, target_stage=5, source=f"Offer accepted ({source})")
     logger.info("offers.accepted id=%s property=%s source=%s", offer_id, property_id, source)
     return {"offer_id": offer_id, "property_id": property_id, "status": "Accepted", "gate": gate.to_dict()}
@@ -184,7 +184,7 @@ async def close_offer(
         try:
             from app.core.docusign_client import void_envelope as _void  # local
             await _void(env_id, reason or f"Offer {status}")
-        except Exception as e:  # noqa: BLE001 â€” completed/declined envelopes can't be voided
+        except Exception as e:  # noqa: BLE001 — completed/declined envelopes can't be voided
             logger.warning("offers.void_envelope_failed id=%s err=%s", env_id, e)
 
     rolled_back = False

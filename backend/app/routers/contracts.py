@@ -4,7 +4,7 @@ Endpoints:
   GET  /api/contracts/templates                          List bundled templates
   GET  /api/contracts/{property_id}/prepare/{template}   Get prefilled HTML + merge fields
   POST /api/contracts/{property_id}/submit               Body has edited HTML + signing roles.
-                                                          We HTMLâ†’PDFâ†’DocuSeal.
+                                                          We HTML→PDF→DocuSeal.
 """
 from __future__ import annotations
 
@@ -97,7 +97,7 @@ async def submit_contract(
     if body.template_key not in TEMPLATES:
         raise HTTPException(400, f"Unknown template: {body.template_key}")
 
-    # 1. Final interpolation pass â€” replace any remaining {{merge_field}} tokens
+    # 1. Final interpolation pass — replace any remaining {{merge_field}} tokens
     #    with current Airtable values before rendering to PDF.
     merge_ctx = build_merge_context(property_id)
     final_body = _interpolate_merge_fields(body.body_html, merge_ctx)
@@ -110,7 +110,7 @@ async def submit_contract(
         pdf_bytes = html_to_pdf(html)
     except Exception as e:  # noqa: BLE001
         logger.error("pdf.render_failed err=%s", e)
-        raise HTTPException(500, "Failed to render PDF â€” check WeasyPrint installation.")
+        raise HTTPException(500, "Failed to render PDF — check WeasyPrint installation.")
 
     # 3. Push to DocuSeal
     submitters_payload = [
@@ -154,7 +154,7 @@ def _interpolate_merge_fields(html: str, ctx: dict[str, Any]) -> str:
     """Replace any remaining `{{key}}` tokens with values from `ctx`.
 
     Tokens whose key isn't in ctx are left untouched so they're visible in the
-    rendered PDF â€” that way nothing fails silently.
+    rendered PDF — that way nothing fails silently.
     """
     def repl(m: re.Match) -> str:
         key = m.group(1)

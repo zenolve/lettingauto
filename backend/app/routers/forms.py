@@ -1,4 +1,4 @@
-"""Internal form submission endpoints â€” these REPLACE the Tally forms.
+"""Internal form submission endpoints — these REPLACE the Tally forms.
 
 The React frontend POSTs to these. They dispatch into the same handlers that
 the legacy Tally webhooks use, so business logic stays in one place.
@@ -115,9 +115,9 @@ def _derive_current_stage_for_check(property_id: str) -> int:
     """Lightweight stage derivation for the stage-gate guard.
 
     Mirrors `app.routers.properties._derive_current_stage` but inline to avoid
-    a circular import. Kept in sync by hand â€” see also frontend/src/lib/stages.ts.
+    a circular import. Kept in sync by hand — see also frontend/src/lib/stages.ts.
     """
-    from app.db import supabase_client as at  # local import â€” avoid load-time cycles
+    from app.db import supabase_client as at  # local import — avoid load-time cycles
     try:
         prop = at.get(at.TableNames.PROPERTIES, property_id)
     except Exception:
@@ -156,11 +156,11 @@ def _require_stage(property_id: str, required: int, action: str) -> None:
 def _require_not_gate_blocked(property_id: str, action: str) -> None:
     """Raise 409 if the property's cached Gate Status is Blocked.
 
-    Reads the cached value (not a fresh re-evaluation) â€” agents already have
+    Reads the cached value (not a fresh re-evaluation) — agents already have
     the "Re-evaluate gate" button on the property page for that. If the
     cached state is stale, the agent can clear it via the UI before retry.
     """
-    from app.db import supabase_client as at  # local import â€” avoid cycles
+    from app.db import supabase_client as at  # local import — avoid cycles
     try:
         prop = at.get(at.TableNames.PROPERTIES, property_id)
     except Exception:
@@ -170,7 +170,7 @@ def _require_not_gate_blocked(property_id: str, action: str) -> None:
         reason = (f.get("Gate Block Reason") or "").strip() or "(no reason recorded)"
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            f"Gate is blocked â€” '{action}' cannot proceed. Block reason: {reason}. "
+            f"Gate is blocked — '{action}' cannot proceed. Block reason: {reason}. "
             f"Resolve the blocker (or re-evaluate the gate if data has been fixed) and try again.",
         )
 
@@ -183,7 +183,7 @@ def _require_checklist_complete(property_id: str, action: str) -> None:
     Checklist". applies_to-based filtering isn't wired yet (see
     [checklist.py] roadmap note), so today every item applies.
     """
-    from app.db import supabase_client as at  # local import â€” avoid cycles
+    from app.db import supabase_client as at  # local import — avoid cycles
     try:
         prop = at.get(at.TableNames.PROPERTIES, property_id)
     except Exception:
@@ -201,7 +201,7 @@ def _require_checklist_complete(property_id: str, action: str) -> None:
         more = f" (and {len(names) - 5} more)" if len(names) > 5 else ""
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            f"Tenancy checklist incomplete â€” '{action}' requires every item ticked. "
+            f"Tenancy checklist incomplete — '{action}' requires every item ticked. "
             f"Outstanding: {preview}{more}.",
         )
 
@@ -246,7 +246,7 @@ async def submit_rra_batch(_: Agent = Depends(require_agent)) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Public â€” token-protected
+# Public — token-protected
 # ---------------------------------------------------------------------------
 STALE_FORM_LINK_DETAIL = (
     "This form link is no longer valid - the property it relates to has been "

@@ -32,7 +32,8 @@ def get_latest_review(property_id: str, _: Agent = Depends(require_agent)) -> di
     # Filter: linked to this property AND has either Gate Warnings or Gate
     # Actions populated AND not dismissed. Airtable doesn't expose the link's
     # record_id directly in filterByFormula, so we walk the property's
-    # Gate_Log link instead â€” cheaper and avoids fragile formula tricks.
+    # Gate_Log link instead — cheaper and avoids fragile formula tricks.
+
     try:
         prop = at.get(at.TableNames.PROPERTIES, property_id)
     except Exception:
@@ -117,7 +118,8 @@ def get_all_warnings(property_id: str, _: Agent = Depends(require_agent)) -> dic
             continue
         groups.append({
             "gate_log_id":   row["id"],
-            "source":        f.get("Gate Warnings Source") or "â€”",
+            "source":        f.get("Gate Warnings Source") or "—",
+
             "to_stage":      f.get("To_Stage"),
             "attempted_at":  f.get("Attempted_At") or "",
             "updated":       f.get("Gate Warnings Updated"),
@@ -156,19 +158,22 @@ def dismiss_review(
 
 
 # ---------------------------------------------------------------------------
-# POST /reevaluate-gate â€” manual re-check after fixing data
+# POST /reevaluate-gate — manual re-check after fixing data
+
 # ---------------------------------------------------------------------------
 # Airtable edits (or external integrations) don't trigger our gate logic, so
 # the cached Gate Status / Gate Block Reason can lag behind reality. This
 # endpoint re-derives the property's current stage from its fields and runs
-# evaluate_gate against the next stage with silent=True (no agent emails â€”
+# evaluate_gate against the next stage with silent=True (no agent emails —
+
 # the agent is staring at the page; the response IS the feedback).
 @router.post("/{property_id}/reevaluate-gate", status_code=status.HTTP_200_OK)
 async def reevaluate_gate(
     property_id: str,
     _: Agent = Depends(require_agent),
 ) -> dict[str, Any]:
-    from app.handlers.pg00_gate import evaluate_gate  # local import â€” keeps load-time graph slim
+    from app.handlers.pg00_gate import evaluate_gate  # local import — keeps load-time graph slim
+
     from app.routers.forms import _derive_current_stage_for_check  # noqa: PLC0415
 
     # The whole point of "re-evaluate" is to reflect out-of-band Airtable edits
@@ -184,13 +189,16 @@ async def reevaluate_gate(
 
     current = _derive_current_stage_for_check(property_id)
     target = current + 1
-    # No gate to evaluate past stage 8 â€” TRANSITIONS stops there. But a stale
+    # No gate to evaluate past stage 8 — TRANSITIONS stops there. But a stale
+
     # "Blocked" status can linger on the property from an earlier failed
-    # evaluation (e.g. the 6â†’7 gate blocked while the TA was unsigned; the
+    # evaluation (e.g. the 6→7 gate blocked while the TA was unsigned; the
+
     # agent then completed signing, so the property now DERIVES to stage 8 but
     # its cached Gate Status / Gate Block Reason still read Blocked). Since the
     # property has cleared every tracked gate, reconcile by clearing that stale
-    # block â€” otherwise "Re-evaluate gate" appears to do nothing. (Reported
+    # block — otherwise "Re-evaluate gate" appears to do nothing. (Reported
+
     # 2026-05-25: gate still showed "TA_LL_Signed not set" after the fields
     # were all set true in Airtable.)
     if target > 8:
@@ -225,15 +233,18 @@ async def reevaluate_gate(
 
 
 # ---------------------------------------------------------------------------
-# PATCH /flags â€” agent toggles for gate-blocking booleans
+# PATCH /flags — agent toggles for gate-blocking booleans
+
 # ---------------------------------------------------------------------------
 # Whitelisted Properties fields the agent can edit directly from the UI. Each
 # entry declares the value type and, for ``bool_with_date``, the paired date
 # column to auto-stamp on tick and clear on untick. Adding a field here is
-# the only thing needed to expose it through the patch endpoint â€” the
+# the only thing needed to expose it through the patch endpoint — the
+
 # frontend component looks it up via /api/properties/flags-catalog.
 # Each entry's `confirm` block (when present) tells the frontend to gate the
-# write behind a modal â€” used for the signing flags where bypassing the
+# write behind a modal — used for the signing flags where bypassing the
+
 # pipeline has audit-trail implications.
 _SIGNING_OVERRIDE_CONFIRM = {
     "title": "Manual signing override",
@@ -248,7 +259,8 @@ _SIGNING_OVERRIDE_CONFIRM = {
 }
 
 PATCHABLE_FLAGS: dict[str, dict[str, Any]] = {
-    # --- Signing overrides (gates: 2â†’3, 3â†’4 for TC; 6â†’7 for TA) ---------
+    # --- Signing overrides (gates: 2→3, 3→4 for TC; 6→7 for TA) ---------
+
     # Set by the DocuSign Connect webhook on the happy path. Surfaced here
     # for wet-ink offline signing, webhook failures, retroactive migration,
     # and amendment-resigning cases where DocuSign won't re-fire.
@@ -269,7 +281,8 @@ PATCHABLE_FLAGS: dict[str, dict[str, Any]] = {
     # --- Stage 8 entry (pre-move-in gate) ---
     "funds_cleared":                 {"type": "bool",           "label": "Funds cleared"},
     "Works_Signed_Off":              {"type": "bool",           "label": "Works signed off"},
-    # Per-doc served flags â€” usually flipped by the tenant-pack handler, but
+    # Per-doc served flags — usually flipped by the tenant-pack handler, but
+
     # exposed here for cases where the doc was served outside the system.
     "How_To_Rent_Served":            {"type": "bool",           "label": "How To Rent served"},
     "Gas_Cert_Served":               {"type": "bool",           "label": "Gas certificate served"},
@@ -317,7 +330,8 @@ PATCHABLE_FLAGS: dict[str, dict[str, Any]] = {
 def flags_catalog(_: Agent = Depends(require_agent)) -> dict[str, Any]:
     """Tell the frontend which flags exist + their metadata.
 
-    Keeps the registry in one place â€” the React component can render any
+    Keeps the registry in one place — the React component can render any
+
     subset of these without each call site duplicating the labels."""
     return {
         "fields": [
@@ -342,8 +356,10 @@ def patch_flags(
         paired date column declared in ``PATCHABLE_FLAGS``
       - text: pass-through; an empty string clears the field
 
-    Unknown keys â†’ 400. We deliberately don't re-evaluate the gate here so
-    toggling a flag doesn't fire stage-advance emails â€” agents trigger that
+    Unknown keys → 400. We deliberately don't re-evaluate the gate here so
+
+    toggling a flag doesn't fire stage-advance emails — agents trigger that
+
     flow explicitly via the existing form submissions.
     """
     if not isinstance(body, dict) or not body:
@@ -356,7 +372,8 @@ def patch_flags(
             f"Field(s) not patchable: {', '.join(unknown)}",
         )
 
-    from datetime import date as _date  # local â€” keep import-time graph slim
+    from datetime import date as _date  # local — keep import-time graph slim
+
     today = _date.today().isoformat()
 
     payload: dict[str, Any] = {}
@@ -390,7 +407,8 @@ def patch_flags(
                     f"{k}: {val!r} not in allowed options {meta['options']}",
                 )
             payload[k] = val or None
-        else:  # pragma: no cover â€” defensive, registry is internal
+        else:  # pragma: no cover — defensive, registry is internal
+
             raise HTTPException(500, f"Unknown field type {t!r} for {k}")
 
     try:
@@ -416,7 +434,8 @@ def delete_property(property_id: str, _: Agent = Depends(require_agent)) -> dict
     Cascade: all linked Tenants (accepted + every offer's applicants), Offers,
     Diary entries, Compliance rows, Financials, Gate_Log, Submissions and
     Sent_Documents, plus the uploaded-files directory. A linked Landlord is
-    deleted only when this was their **sole** property â€” otherwise it's left in
+    deleted only when this was their **sole** property — otherwise it's left in
+
     place (Airtable clears the link automatically). Shared catalog links
     (Tenancy Checklist) are not deleted, only unlinked.
 
@@ -459,7 +478,8 @@ def delete_property(property_id: str, _: Agent = Depends(require_agent)) -> dict
                 logger.warning("delete.cascade_failed table=%s id=%s err=%s", tbl, rid, e)
         deleted[tbl] = n
 
-    # Landlords: delete only if this property is their only one. Read fresh â€”
+    # Landlords: delete only if this property is their only one. Read fresh —
+
     # a cached landlord record could show a stale Properties list (e.g. a
     # property deleted seconds ago), and getting this wrong on a destructive
     # op would either orphan a landlord or wrongly delete one with other
@@ -536,7 +556,8 @@ def _derive_stage_order_from_fields(f: dict) -> int:
     """Stage derivation from a Property fields dict.
 
     Keep in sync with the frontend [stages.ts:deriveCurrentStage] and the
-    backend [forms.py:_derive_current_stage_for_check] â€” same priorities,
+    backend [forms.py:_derive_current_stage_for_check] — same priorities,
+
     most-advanced-state first. Inlined here to keep the dashboard list
     endpoint a single Airtable read per page load.
     """

@@ -1,4 +1,4 @@
-"""PG_06 â€” Daily diary scheduler (spec Â§6.7).
+"""PG_06 — Daily diary scheduler (spec §6.7).
 
 Picks up all `Fired=False` diary entries whose `Alert_Date` is on or before
 today, fires the appropriate email, and marks them as fired (only after the
@@ -37,7 +37,7 @@ async def run_scheduler(batch_size: int = 100) -> dict:
     skipped = 0
     for row in rows:
         f = row.get("fields", {})
-        # Field is "Diary_Type" (singleSelect) in the live base â€” reading "Type"
+        # Field is "Diary_Type" (singleSelect) in the live base — reading "Type"
         # always returned None, so every alert fired with the generic template
         # and a "Diary alert: None" subject. Fixed 2026-05-25.
         diary_type = f.get("Diary_Type")

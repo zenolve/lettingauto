@@ -1,4 +1,4 @@
-"""File uploads â€” per-property document storage.
+"""File uploads — per-property document storage.
 
 Replaces the legacy "url" fields on landlord admin / verification forms (which
 used to point at Tally's storage). Files now live on the backend filesystem
@@ -230,12 +230,12 @@ def list_property_uploads(
 
 
 # ---------------------------------------------------------------------------
-# Bucket â†’ Airtable URL-field mapping. When a file is uploaded to / replaced
+# Bucket → Airtable URL-field mapping. When a file is uploaded to / replaced
 # in / deleted from one of these buckets, the agent-facing uploads manager
 # syncs the matching record's URL field automatically.
 #
-#   target = "properties"  â†’ field on the Properties record
-#   target = "landlord"    â†’ field on the FIRST linked Landlord (primary)
+#   target = "properties"  → field on the Properties record
+#   target = "landlord"    → field on the FIRST linked Landlord (primary)
 #
 # Buckets not listed here are file-only (the file is still served, but no
 # Airtable column tracks it).

@@ -1,4 +1,4 @@
-"""PG_01 â€” Property take-on handler (spec Â§6.1).
+"""PG_01 — Property take-on handler (spec §6.1).
 
 Driven by either:
 - the internal POST /api/forms/property-takeon endpoint (preferred), or
@@ -25,8 +25,8 @@ logger = get_logger(__name__)
 
 async def handle_takeon(payload: PropertyTakeonInput) -> dict:
     # Annualise the rent based on the chosen frequency (Weekly Ã— 52 or
-    # Monthly Ã— 12) â€” drives APT vs. Common Law classification per the
-    # Housing Act 1988 Â£100k threshold.
+    # Monthly × 12) — drives APT vs. Common Law classification per the
+    # Housing Act 1988 £100k threshold.
     if payload.asking_rent_pcm:
         multiplier = 52 if payload.rent_frequency == "Weekly" else 12
         annual_rent = payload.asking_rent_pcm * multiplier
@@ -37,7 +37,7 @@ async def handle_takeon(payload: PropertyTakeonInput) -> dict:
     stage_1 = find_stage_by_order(1)
     stage_1_id = stage_1["id"] if stage_1 else None
 
-    # 1. Create Property record. Note the trailing space on "Annual Rent " â€”
+    # 1. Create Property record. Note the trailing space on "Annual Rent " —
     #    that's how the field is named in the live Airtable base.
     property_fields: dict = {
         "Address": payload.address,
@@ -116,11 +116,11 @@ async def handle_takeon(payload: PropertyTakeonInput) -> dict:
             property_id,
         )
 
-    # 6. Gate check â€” should pass immediately (landlord just linked)
+    # 6. Gate check — should pass immediately (landlord just linked)
     gate = await evaluate_gate(property_id, target_stage=2)
 
     # NOTE (billing): with pay-first take-on, the GBP 50 fee is collected
-    # BEFORE this handler runs â€” the forms router stores the payload as a
+    # BEFORE this handler runs — the forms router stores the payload as a
     # pending intent and only calls handle_takeon once Stripe confirms payment
     # (services/billing.mark_paid_and_fulfill). This function itself is
     # payment-agnostic.

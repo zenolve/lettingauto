@@ -1,4 +1,4 @@
-"""PG_05 â€” Tenant pack / pre-move-in (spec Â§6.6).
+"""PG_05 — Tenant pack / pre-move-in (spec §6.6).
 
 Generates the standard prescribed documents as PDFs, attaches them to a single
 email to the tenant, persists each served PDF under
@@ -6,8 +6,8 @@ email to the tenant, persists each served PDF under
 Compliance audit row per document.
 
 Per the master compliance doc: prescribed documents MUST be PDF attachments,
-never links â€” non-service blocks possession proceedings and (for the RRA sheet)
-risks a Â£7,000 fine per breach.
+never links — non-service blocks possession proceedings and (for the RRA sheet)
+risks a £7,000 fine per breach.
 
 For gas_cert / epc / eicr we prefer the landlord's actual uploaded PDF (lives
 in ``uploads/<property_id>/<bucket>/``) over the generated placeholder, so the
@@ -35,7 +35,7 @@ from app.services.prescribed_docs import (
 logger = get_logger(__name__)
 
 
-# Map prescribed-doc keys â†’ the Properties boolean field that records service.
+# Map prescribed-doc keys → the Properties boolean field that records service.
 _SERVED_FLAGS: dict[str, str] = {
     "how_to_rent":    "How_To_Rent_Served",
     "gas_cert":       "Gas_Cert_Served",
@@ -89,7 +89,7 @@ async def handle_tenant_pack(property_id: str) -> dict:
     address = pfields.get("Address", "")
     is_apt = pfields.get("Tenancy Type") == "APT"
 
-    # Collect every tenant on the property (HMO / multi-tenant support â€” step 26).
+    # Collect every tenant on the property (HMO / multi-tenant support — step 26).
     tenant_ids: list[str] = pfields.get("Tenant") or []
     tenants: list[dict] = []
     for tid in tenant_ids:
@@ -103,7 +103,7 @@ async def handle_tenant_pack(property_id: str) -> dict:
 
     # 1. Build the attachment set for the pack.
     # For gas_cert / epc / eicr, prefer the landlord's actual uploaded PDF
-    # (mandated by the master compliance doc â€” placeholder PDFs are NOT
+    # (mandated by the master compliance doc — placeholder PDFs are NOT
     # legally valid certs). Fall back to the placeholder only if nothing was
     # uploaded so the pack still goes out with a visible warning to the agent.
     served: list[dict] = []
@@ -131,7 +131,7 @@ async def handle_tenant_pack(property_id: str) -> dict:
             logger.info("tenant_pack.attached_uploaded key=%s file=%s", key, latest_path.name)
         else:
             if bucket:
-                # Bucket exists in our model but landlord never uploaded â€”
+                # Bucket exists in our model but landlord never uploaded —
                 # surface this so the agent can fix it before re-sending.
                 missing_real_pdf.append(key)
             try:
@@ -163,7 +163,7 @@ async def handle_tenant_pack(property_id: str) -> dict:
             try:
                 await send_email(
                     t["email"],
-                    subject=f"Your move-in pack â€” {address}",
+                    subject=f"Your move-in pack — {address}",
                     html=html,
                     attachments=attachments,
                 )
@@ -183,7 +183,7 @@ async def handle_tenant_pack(property_id: str) -> dict:
     if flag_update:
         at.update(at.TableNames.PROPERTIES, property_id, flag_update)
 
-    # 4. Write a Compliance audit row per document â€” links all tenants so
+    # 4. Write a Compliance audit row per document — links all tenants so
     #    multi-tenant tenancies have a complete service trail.
     served_to_str = ", ".join(sent_to) if sent_to else ""
     from app.services.sent_documents import record_sent  # noqa: PLC0415
@@ -225,11 +225,11 @@ async def handle_tenant_pack(property_id: str) -> dict:
     if agent_email:
         try:
             html = render("E10_pack_sent.html", property_address=address)
-            await send_email(agent_email, subject=f"Tenant pack sent â€” {address}", html=html)
+            await send_email(agent_email, subject=f"Tenant pack sent — {address}", html=html)
         except Exception as e:  # noqa: BLE001
             logger.warning("agent_summary.send_failed err=%s", e)
 
-    # 6. Re-evaluate gate (pre-move-in â†’ live tenancy).
+    # 6. Re-evaluate gate (pre-move-in → live tenancy).
     gate = await evaluate_gate(property_id, target_stage=8)
 
     return {

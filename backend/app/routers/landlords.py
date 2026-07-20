@@ -1,14 +1,14 @@
-"""Landlord-level CRUD â€” currently just the flags catalog + PATCH used by the
+"""Landlord-level CRUD — currently just the flags catalog + PATCH used by the
 LandlordFlags panel on the property detail page.
 
 Mirrors the shape of properties.py:flags but with a landlord-specific
-allowlist and one extra field type â€” ``single_select`` for the Airtable
+allowlist and one extra field type — ``single_select`` for the Airtable
 singleSelect columns ``ID_Name_Match`` and ``Verification Status``. The
 catalog declares each option so the UI can render a dropdown without
 guessing.
 
 When ``ID_Name_Match`` flips off ``Pending``, ``AML_Check_Date`` is
-auto-stamped today and ``AML_Checked_By`` records the acting agent â€” that
+auto-stamped today and ``AML_Checked_By`` records the acting agent — that
 captures the "who did the AML review and when" trail required by the Money
 Laundering Regulations 2017.
 """
@@ -125,7 +125,7 @@ def patch_flags(
             payload[k] = "" if raw is None else str(raw)
         elif t == "bool":
             payload[k] = bool(raw)
-        else:  # pragma: no cover â€” registry is internal
+        else:  # pragma: no cover — registry is internal
             raise HTTPException(500, f"Unknown field type {t!r} for {k}")
 
     try:

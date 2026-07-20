@@ -1,10 +1,10 @@
 """Per-stage sent-document records (``Sent_Documents`` table).
 
-One structured row per document sent for a property â€” library letters,
+One structured row per document sent for a property — library letters,
 prescribed-pack docs, offer / contract sends. Replaces the old habit of
 overloading ``Submissions`` with "Library:" JSON-text rows.
 
-All writers go through ``record_sent`` (best-effort â€” never raises into the
+All writers go through ``record_sent`` (best-effort — never raises into the
 send path). The signing webhook calls ``update_status_by_envelope`` to flip a
 row's status to Signed / Declined when the envelope completes, closing the
 loop that used to be invisible.
