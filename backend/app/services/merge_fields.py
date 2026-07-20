@@ -27,7 +27,7 @@ def _first(v: Any) -> str | None:
 
 
 def _money(v: Any) -> str:
-    """Format a numeric amount as a pound value ("£1,500.00") for documents.
+    """Format a numeric amount as a pound value ("\u00a31,500.00") for documents.
 
     Empty/missing values stay "" (templates keep their [bracketed] blanks);
     non-numeric values pass through unchanged.
@@ -35,7 +35,7 @@ def _money(v: Any) -> str:
     if v is None or v == "":
         return ""
     try:
-        return f"£{float(v):,.2f}"
+        return f"\u00a3{float(v):,.2f}"
     except (TypeError, ValueError):
         return str(v)
 

@@ -84,7 +84,7 @@ def create_offer(
     except Exception:
         addr = ""
     fields: dict[str, Any] = {
-        "Name": (f"Offer · {lead_tenant_name} · {addr}").strip(" ·") or "Offer",
+        "Name": (f"Offer \u00b7 {lead_tenant_name} \u00b7 {addr}").strip(" \u00b7") or "Offer",
         "Property": [property_id],
         "Tenants": tenant_ids,
         "Status": "Pending",

@@ -45,7 +45,7 @@ def record_sent(
     failure rather than breaking the document send."""
     try:
         fields: dict[str, Any] = {
-            "Name": f"{doc_name} · {date.today().isoformat()}",
+            "Name": f"{doc_name} \u00b7 {date.today().isoformat()}",
             "Property": [property_id],
             "Doc ID": doc_id,
             "Doc Name": doc_name,
