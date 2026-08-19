@@ -3,20 +3,23 @@
 <head>
 <meta charset="utf-8">
 <title>{{ title }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=Inter:wght@400..700&display=swap" rel="stylesheet">
 <style>
   @page {
     size: A4;
     margin: 22mm 18mm 22mm 18mm;
     @top-left {
       content: "{{ brand_name }}";
-      font-family: 'Helvetica', 'Arial', sans-serif;
+      font-family: 'Inter', 'Helvetica', 'Arial', sans-serif;
       color: {{ brand_navy }};
       font-size: 9pt;
       font-weight: 700;
     }
     @top-right {
       content: "{{ title }}";
-      font-family: 'Helvetica', 'Arial', sans-serif;
+      font-family: 'Inter', 'Helvetica', 'Arial', sans-serif;
       color: #6b7280;
       font-size: 9pt;
     }
@@ -24,12 +27,19 @@
     @bottom-right { content: "Page " counter(page) " of " counter(pages); color:#9ca3af; font-size:8pt; }
   }
   body {
-    font-family: 'Helvetica', 'Arial', sans-serif;
+    font-family: 'Inter', system-ui, 'Helvetica', 'Arial', sans-serif;
     font-size: 11pt;
-    color: #111827;
-    line-height: 1.55;
+    color: #1a1a18;
+    line-height: 1.6;
   }
-  h1, h2, h3 { color: {{ brand_navy }}; }
+  /* Headings mirror the in-app editor (Editorial Mesh): Fraunces serif, ink —
+     not the agency navy — so the downloaded PDF is WYSIWYG with the editor. */
+  h1, h2, h3 {
+    font-family: 'Fraunces', Georgia, 'Times New Roman', serif;
+    color: #1a1a18;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
   h1 { font-size: 20pt; margin: 0 0 10pt 0; border-bottom: 2pt solid {{ brand_gold }}; padding-bottom: 4pt; }
   h2 { font-size: 14pt; margin: 18pt 0 4pt 0; }
   h3 { font-size: 12pt; margin: 12pt 0 3pt 0; }

@@ -65,6 +65,13 @@ PATCHABLE_LANDLORD_FLAGS: dict[str, dict[str, Any]] = {
         "type": "single_select",
         "label": "Verification status",
         "options": ["Pending Review", "Approved", "Rejected"],
+        # Stored values stay the same; these are richer labels the UI shows so
+        # the agent knows what each choice means (UAT feedback #5).
+        "option_labels": {
+            "Pending Review": "Pending review - AML checks not yet complete",
+            "Approved": "Approved - identity & AML checks passed, cleared to proceed",
+            "Rejected": "Rejected - checks failed or documents insufficient",
+        },
     },
     "ID_Name_Match": {
         "type": "single_select",

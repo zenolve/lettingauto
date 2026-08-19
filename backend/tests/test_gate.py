@@ -58,13 +58,25 @@ def test_gate_2_to_3_blocks_on_not_provided_epc():
         "EICR Expiry": (date.today() + timedelta(days=400)).isoformat(),
         "TC_Signed": True,
     }
-    assert any("EPC_Status" in f for f in _eval(3, fields))
+    assert any("EPC status" in f for f in _eval(3, fields))
 
 
 def test_gate_6_to_7_requires_all_four():
     fields = {"TA_LL_Signed": True, "TA_TT_Signed": False, "TDS Cert On File": True, "Deposit Registered": True}
     failures = _eval(7, fields)
-    assert any("TA_TT" in f for f in failures)
+    assert any("TA signed by tenant" in f for f in failures)
+
+
+def test_gate_6_to_7_common_law_skips_tds():
+    """Common-law tenancies are outside the deposit-protection regime, so the
+    TDS / deposit-registration gates must not block them (UAT feedback #16)."""
+    fields = {"TA_LL_Signed": True, "TA_TT_Signed": True,
+              "TDS Cert On File": False, "Deposit Registered": False,
+              "Tenancy Type": "Common Law"}
+    assert _eval(7, fields) == []
+    # An APT with the same missing deposit fields still blocks.
+    apt = {**fields, "Tenancy Type": "APT"}
+    assert _eval(7, apt) != []
 
 
 def test_gate_7_to_8_requires_apt_rra():

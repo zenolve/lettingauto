@@ -252,7 +252,9 @@ _SIGNING_OVERRIDE_CONFIRM = {
         "You are about to set this signature flag without going through the "
         "DocuSign envelope. Make sure ALL named parties have signed (wet-ink "
         "or via another channel) and that the signed PDF is on file before "
-        "continuing. This bypasses the normal audit trail."
+        "continuing. This bypasses the normal audit trail. "
+        "After saving, re-open this record and confirm the related fields "
+        "(signing dates, uploaded document, party names) are correct."
     ),
     "confirmLabel": "Yes, mark as signed",
     "tone": "warning",

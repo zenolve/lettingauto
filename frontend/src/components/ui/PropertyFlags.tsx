@@ -17,6 +17,9 @@ type FlagMeta = {
   label: string;
   date_field?: string;
   options?: string[];   // single_select only
+  /** Optional richer display labels for single_select options. The stored
+   * value stays `options[i]`; the dropdown shows option_labels[value] if set. */
+  option_labels?: Record<string, string>;
   /** When present, the component opens a confirmation modal before the
    * PATCH fires. Used for high-stakes overrides (e.g. signing flags). */
   confirm?: ConfirmMeta;
@@ -179,7 +182,7 @@ export function PropertyFlags({
                   onChange={(e) => patch(row.name, e.target.value)}>
                   <option value="">—</option>
                   {(row.options ?? []).map((opt) => (
-                    <option key={opt} value={opt}>{opt}</option>
+                    <option key={opt} value={opt}>{row.option_labels?.[opt] ?? opt}</option>
                   ))}
                 </select>
                 {isBusy && <span className="text-xs text-ink-muted shrink-0">Saving…</span>}

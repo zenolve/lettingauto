@@ -547,6 +547,22 @@ async def send_library_doc(
     # --- Mode dispatch --------------------------------------------------
     result: dict[str, Any] = {"doc_id": doc_id, "mode": body.mode, "title": body.title}
 
+    # All send modes need a recipient email. Reject a recipient row that has no
+    # email up front with a clear message, rather than attempting the send and
+    # failing opaquely mid-loop (UAT feedback #9).
+    if body.mode in ("sign", "email_pdf", "email_html") and body.recipients:
+        blank = [
+            (r.name or f"recipient {i + 1}")
+            for i, r in enumerate(body.recipients)
+            if not ((r.email or "").strip())
+        ]
+        if blank:
+            raise HTTPException(
+                400,
+                f"Missing email address for: {', '.join(blank)}. "
+                "Add an email for each recipient before sending.",
+            )
+
     if body.mode == "sign":
         if not body.recipients:
             raise HTTPException(400, "At least one recipient required for sign mode.")
@@ -563,6 +579,19 @@ async def send_library_doc(
         # Anchor strings: the LibraryDoc spec can override the defaults per-doc
         # (the T&C 2026 uses "/sig1/" and "/sig2/" baked into the source PDF).
         anchor_strings = getattr(doc, "anchor_strings", None) or ["/sig1/", "/sig2/"]
+
+        # Guard the "signature N doesn't appear" case: if more people are set to
+        # sign than the document has anchor slots, the extra signers get no
+        # signature field placed. Fail clearly rather than silently (feedback #15).
+        mandatory_count = sum(1 for r in body.recipients if r.mandatory)
+        if mandatory_count > len(anchor_strings):
+            raise HTTPException(
+                400,
+                f"This document has {len(anchor_strings)} signature slot(s) but "
+                f"{mandatory_count} signers were added - the extra signer(s) would "
+                "get no signature field. Remove signers, mark some as CC, or use a "
+                "document with more signature slots.",
+            )
 
         submission = await send_for_signature(
             name=doc.name,   # used as the email subject + by _doc_kind() downstream
@@ -617,6 +646,8 @@ async def send_library_doc(
                 sent.append(r.email)
             except Exception as e:  # noqa: BLE001
                 logger.warning("library.email_pdf.send_failed to=%s err=%s", r.email, e)
+        if not sent:
+            raise HTTPException(502, "Could not email any recipient - check SMTP settings and recipient addresses.")
         result.update({"sent_to": sent, "pdf_url": pdf_url})
 
     elif body.mode == "email_html":
@@ -629,6 +660,8 @@ async def send_library_doc(
                 sent.append(r.email)
             except Exception as e:  # noqa: BLE001
                 logger.warning("library.email_html.send_failed to=%s err=%s", r.email, e)
+        if not sent:
+            raise HTTPException(502, "Could not email any recipient - check SMTP settings and recipient addresses.")
         result.update({"sent_to": sent})
 
     # --- Record the send in Sent_Documents (per-stage audit) -----------

@@ -60,6 +60,10 @@ async def send_email(
         return
 
     msg = EmailMessage()
+    # Sender stays on the configured platform address (FROM_EMAIL, currently the
+    # zenolve domain). Switching the From address / Reply-To to an agency mailbox
+    # (e.g. management@palacegate.com) is deferred until that domain has its own
+    # SMTP + SPF/DKIM, so deliverability isn't broken in the meantime (UAT #10).
     msg["From"] = settings.from_email
     msg["To"] = to if isinstance(to, str) else ", ".join(to)
     if cc:

@@ -68,11 +68,43 @@ def _ok() -> str:
     return ""
 
 
+# Human-readable descriptions so gate-block reasons read as plain English for
+# the agent instead of leaking internal column names (UAT feedback #17).
+_BOOL_LABELS: dict[str, str] = {
+    "TC_Signed": "the Terms & Conditions have not been signed by the landlord",
+    "TA_LL_Signed": "the tenancy agreement has not been signed by the landlord",
+    "TA_TT_Signed": "the tenancy agreement has not been signed by all tenants",
+    "TDS Cert On File": "the deposit-scheme (TDS) certificate is not on file",
+    "Deposit Registered": "the deposit has not been registered with a scheme",
+    "LL_Offer_Accepted": "the landlord has not accepted the offer",
+    "Anti_Discrimination_Confirmed": "the anti-discrimination confirmation has not been ticked",
+    "HMO_Licence_Confirmed": "the HMO licence has not been confirmed",
+    "funds_cleared": "move-in funds have not been confirmed as cleared",
+    "How_To_Rent_Served": "the 'How to Rent' guide has not been served to the tenant",
+    "Gas_Cert_Served": "the gas safety record has not been served to the tenant",
+    "EPC_Served": "the EPC has not been served to the tenant",
+    "EICR_Served": "the EICR has not been served to the tenant",
+    "TDS_Info_Served": "the deposit prescribed information has not been served",
+    "RRA_Sheet_Served": "the Renters' Rights Act information sheet has not been served",
+    "Works_Signed_Off": "pre-tenancy works have not been signed off",
+}
+_CERT_NAMES: dict[str, str] = {
+    "Gas_Cert_Status": "gas safety certificate",
+    "EPC_Status": "EPC",
+    "EICR_Status": "EICR (electrical report)",
+}
+_DATE_NAMES: dict[str, str] = {
+    "Gas Certificates Expiry": "gas safety certificate",
+    "EICR Expiry": "EICR",
+}
+
+
 def _cert_status_acceptable(field: dict, key: str) -> str:
     v = field.get(key)
     if v in ("On File", "Agency Arranging"):
         return ""
-    return f"{key} = {v or 'missing'}"
+    name = _CERT_NAMES.get(key, key)
+    return f"{name} is not on file (status: {v or 'missing'})"
 
 
 def _epc_not_fg(field: dict) -> str:
@@ -87,17 +119,20 @@ def _date_not_expired(field: dict, key: str) -> str:
     val = field.get(key)
     d = parse_iso_date(val) if isinstance(val, str) else val
     if d and isinstance(d, date) and d < date.today():
-        return f"{key} expired ({d.isoformat()})"
+        name = _DATE_NAMES.get(key, key)
+        return f"the {name} expired on {d.isoformat()}"
     return ""
 
 
 def _bool_true(field: dict, key: str) -> str:
-    return "" if field.get(key) else f"{key} not set"
+    return "" if field.get(key) else _BOOL_LABELS.get(key, f"{key} not set")
 
 
 def _has_linked(field: dict, key: str) -> str:
     val = field.get(key) or []
-    return "" if val else f"No {key} linked"
+    if val:
+        return ""
+    return "no landlord is linked to this property" if key == "Landlords" else f"no {key} linked"
 
 
 def _all_tenants_have(field: dict, key: str) -> str:
@@ -108,7 +143,7 @@ def _all_tenants_have(field: dict, key: str) -> str:
     """
     tenant_ids = field.get("Tenant") or []
     if not tenant_ids:
-        return "No tenant linked"
+        return "no tenant is linked to this property"
     missing: list[str] = []
     for tid in tenant_ids:
         try:
@@ -119,7 +154,7 @@ def _all_tenants_have(field: dict, key: str) -> str:
         if not tf.get(key):
             missing.append(tf.get("Name") or tid)
     if missing:
-        return f"{key} missing for: {', '.join(missing)}"
+        return f"referencing outcome not yet recorded for: {', '.join(missing)}"
     return ""
 
 
@@ -161,8 +196,14 @@ TRANSITIONS: dict[int, list[tuple[str, Condition]]] = {
     7: [  # 6 → 7: TA signed
         ("TA signed by landlord", lambda f: _bool_true(f, "TA_LL_Signed")),
         ("TA signed by tenant", lambda f: _bool_true(f, "TA_TT_Signed")),
-        ("TDS cert on file", lambda f: _bool_true(f, "TDS Cert On File")),
-        ("Deposit registered", lambda f: _bool_true(f, "Deposit Registered")),
+        # Deposit protection (TDS) is a Housing Act 2004 duty that applies to
+        # assured / AST tenancies only. Common-law tenancies (e.g. high-rent or
+        # company lets) fall outside that regime, so these two gates are skipped
+        # for them (UAT feedback #16).
+        ("TDS cert on file",
+         lambda f: _bool_true(f, "TDS Cert On File") if f.get("Tenancy Type") != "Common Law" else _ok()),
+        ("Deposit registered",
+         lambda f: _bool_true(f, "Deposit Registered") if f.get("Tenancy Type") != "Common Law" else _ok()),
     ],
     8: [  # 7 → 8: pre move-in complete
         ("Funds cleared", lambda f: _bool_true(f, "funds_cleared")),

@@ -13,8 +13,6 @@ type Stored = {
 
 type BucketMeta = {
   name: string;
-  syncs_to_airtable: boolean;
-  airtable_target?: { target: string; field: string } | null;
 };
 
 type ListResponse = { property_id: string; buckets: Record<string, Stored[]> };
@@ -63,7 +61,7 @@ export default function PropertyUploads() {
   const { id: propertyId = "" } = useParams();
   const [list, setList] = useState<ListResponse | null>(null);
   const [meta, setMeta] = useState<BucketMeta[]>([]);
-  const [filter, setFilter] = useState<"all" | "has_files" | "syncs">("has_files");
+  const [filter, setFilter] = useState<"all" | "has_files">("has_files");
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
@@ -92,7 +90,6 @@ export default function PropertyUploads() {
       .map((m) => ({ ...m, files: buckets[m.name] ?? [] }))
       .filter((r) => {
         if (filter === "all") return true;
-        if (filter === "syncs") return r.syncs_to_airtable;
         return r.files.length > 0;
       });
   }, [meta, list, filter]);
@@ -104,19 +101,19 @@ export default function PropertyUploads() {
         <div className="kicker mt-2">Document store</div>
         <h1 className="mt-1">Uploads</h1>
         <p className="mt-3 text-ink-soft max-w-2xl">
-          Every file the landlord (or you) has uploaded against this property, grouped by purpose. Replacing a file syncs
-          the new URL to the matching Airtable column automatically; deleting the last file in a bucket clears it.
+          Every file the landlord (or you) has uploaded against this property, grouped by purpose. Replacing a file updates
+          the property record automatically; deleting the last file in a bucket clears it.
         </p>
       </header>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="inline-flex rounded-md border border-cream-300 bg-white p-0.5 text-sm">
-          {(["has_files", "syncs", "all"] as const).map((k) => (
+          {(["has_files", "all"] as const).map((k) => (
             <button
               key={k}
               onClick={() => setFilter(k)}
               className={`px-3 py-1.5 rounded ${filter === k ? "bg-navy-600 text-white" : "text-ink-soft hover:bg-cream-100"}`}>
-              {k === "has_files" ? "With files" : k === "syncs" ? "Syncs to Airtable" : "All buckets"}
+              {k === "has_files" ? "With files" : "All buckets"}
             </button>
           ))}
         </div>
@@ -138,17 +135,13 @@ export default function PropertyUploads() {
                 const form = new FormData();
                 form.append("file", file, file.name);
                 const qs = oldFilename ? `?delete_filename=${encodeURIComponent(oldFilename)}` : "";
-                const { data } = await api.post(
+                await api.post(
                   `/api/uploads/agent/${propertyId}/${r.name}/replace${qs}`,
                   form,
                   { headers: { "Content-Type": "multipart/form-data" } },
                 );
                 await refresh();
-                setFlash(
-                  data.synced
-                    ? `Uploaded → ${prettyName(r.name)}. Synced ${data.synced.table}.${data.synced.field}.`
-                    : `Uploaded → ${prettyName(r.name)}.`,
-                );
+                setFlash(`Uploaded → ${prettyName(r.name)}.`);
               } catch (e: any) {
                 setErr(e?.response?.data?.detail ?? "Upload failed");
               } finally {
@@ -160,13 +153,9 @@ export default function PropertyUploads() {
               setBusyKey(`${r.name}::${filename}`);
               setErr(null); setFlash(null);
               try {
-                const { data } = await api.delete(`/api/uploads/agent/${propertyId}/${r.name}/${encodeURIComponent(filename)}`);
+                await api.delete(`/api/uploads/agent/${propertyId}/${r.name}/${encodeURIComponent(filename)}`);
                 await refresh();
-                setFlash(
-                  data.synced
-                    ? `Deleted. Airtable ${data.synced.field} now ${data.remaining_url ? "points at next-newest file" : "cleared"}.`
-                    : "Deleted.",
-                );
+                setFlash("Deleted.");
               } catch (e: any) {
                 setErr(e?.response?.data?.detail ?? "Delete failed");
               } finally {
@@ -204,11 +193,6 @@ function BucketCard({
           <h3 className="font-serif text-base font-semibold text-navy-700 leading-tight">{prettyName(meta.name)}</h3>
           <div className="text-xs uppercase tracking-kicker text-ink-muted mt-1">{meta.name}</div>
         </div>
-        {meta.syncs_to_airtable && meta.airtable_target && (
-          <span className="text-[10px] uppercase tracking-kicker text-gold-700 bg-gold-200 px-2 py-0.5 rounded">
-            syncs → {meta.airtable_target.field}
-          </span>
-        )}
       </header>
 
       {files.length === 0 ? (
