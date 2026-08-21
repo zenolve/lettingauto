@@ -94,6 +94,45 @@ def list_library(
 # been edited (placeholder body), the first PUT promotes them from
 # `master_doc` → `library_file` on the next service restart.
 # ---------------------------------------------------------------------------
+# Per-document "sends to" audience — which parties a document is addressed to,
+# so the per-property send editor can pre-fill recipient emails. Persisted as a
+# small JSON map under the uploads/ volume, which survives container rebuilds
+# and deploys (the templates dir is baked into the image and would not). Roles
+# resolve to stored emails via merge_fields.
+VALID_AUDIENCE_ROLES = ("Landlord", "Tenant", "Guarantor")
+
+
+def _audience_path():
+    from pathlib import Path  # local import — keep module top imports untouched
+    uploads_root = Path(__file__).resolve().parent.parent.parent / "uploads"
+    return uploads_root / "_config" / "doc_audience.json"
+
+
+def get_audience(doc_id: str) -> list[str]:
+    import json  # noqa: PLC0415 — module keeps json as a local import
+    try:
+        data = json.loads(_audience_path().read_text(encoding="utf-8"))
+        return [r for r in (data.get(doc_id) or []) if r in VALID_AUDIENCE_ROLES]
+    except Exception:  # noqa: BLE001 — missing/corrupt file → no audience
+        return []
+
+
+def set_audience(doc_id: str, roles: list[str]) -> list[str]:
+    import json  # noqa: PLC0415 — module keeps json as a local import
+    clean = [r for r in roles if r in VALID_AUDIENCE_ROLES]
+    path = _audience_path()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
+    data[doc_id] = clean
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    return clean
+
+
 @router.get("/{doc_id}/raw")
 def get_raw_body(
     doc_id: str,
@@ -115,11 +154,13 @@ def get_raw_body(
         "signers": doc.signers,
         "body_html": get_body(doc),
         "is_placeholder": doc.source == "master_doc",
+        "audience": get_audience(doc_id),
     }
 
 
 class TemplateUpdate(BaseModel):
     body_html: str
+    audience: list[str] | None = None
 
 
 @router.put("/{doc_id}/raw")
@@ -142,6 +183,8 @@ def update_raw_body(
     target = _LIBRARY_DIR / f"{doc_id}.html"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(body.body_html, encoding="utf-8")
+    if body.audience is not None:
+        set_audience(doc_id, body.audience)
     # Hot-promote master_doc → library_file so subsequent reads pick up the
     # new file in the same server process.
     if doc.source == "master_doc":
@@ -297,6 +340,7 @@ def prepare_library_doc(
             "description": doc.description,
         },
         "body_html": body_html,
+        "audience": get_audience(doc_id),
         "merge_fields": merge_ctx,
         "merge_field_catalogue": MERGE_FIELD_CATALOGUE,
     }

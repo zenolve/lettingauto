@@ -4,6 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { ContractEditor, EditorHandle } from "../components/ContractEditor";
 import { BackLink } from "../components/ui/BackLink";
 import { api } from "../lib/api";
+import { MERGE_DESCRIPTIONS } from "../lib/mergeFieldInfo";
 
 type MergeField = { group: string; key: string; label: string };
 type LibraryDoc = {
@@ -20,6 +21,7 @@ type PrepareResp = {
   body_html: string;
   merge_fields: Record<string, any>;
   merge_field_catalogue: MergeField[];
+  audience?: string[];
 };
 
 type SendMode = "sign" | "email_pdf" | "email_html";
@@ -70,6 +72,8 @@ export default function LibraryEditor() {
   // the first available signature on the backend.
   const [signatureChoices, setSignatureChoices] = useState<Record<string, string>>({});
   const handleRef = useRef<EditorHandle | null>(null);
+  const [selectedAttribute, setSelectedAttribute] = useState<string | null>(null);
+  const [fieldFilter, setFieldFilter] = useState("");
 
   useEffect(() => {
     api.get<PrepareResp>(`/api/library/${docId}/prepare/${propertyId}`)
@@ -81,7 +85,13 @@ export default function LibraryEditor() {
         // Seed default recipients from the doc's signer roles. Default
         // mandatory=true so every seeded recipient signs; the agent toggles
         // off any who should be CC-only.
-        setRecipients(r.data.document.signers.map((role) => ({
+        // Seed recipients from the document's signers (sign docs) or, for
+        // email docs with no signers, from the template's "Sends to" audience.
+        // Each role's email is pre-filled from the system where we have it.
+        const seedRoles = r.data.document.signers.length
+          ? r.data.document.signers
+          : (r.data.audience ?? []);
+        setRecipients(seedRoles.map((role) => ({
           role,
           name: roleName(role, r.data.merge_fields),
           email: roleEmail(role, r.data.merge_fields),
@@ -227,7 +237,7 @@ export default function LibraryEditor() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">
-      <div className="space-y-4">
+      <div className="space-y-4 min-w-0">
         <div>
           <BackLink to={`/agent/properties/${propertyId}?stage=${data.document.stage}`} label="Property" />
           <h1 className="text-2xl font-bold text-navy-700 mt-1">{data.document.name}</h1>
@@ -240,7 +250,11 @@ export default function LibraryEditor() {
         </div>
 
         <ContractEditor initialHtml={html} onChange={setHtml}
-                        editorRef={(h) => { handleRef.current = h; }} />
+                        editorRef={(h) => { handleRef.current = h; }}
+                        onSelectMergeField={setSelectedAttribute} />
+        <p className="text-xs text-ink-muted">
+          Highlighted text is a merge field — hover to see its attribute, or Ctrl/Cmd-click it to select it.
+        </p>
 
         {mode === "email_pdf" && (
           <section className="card p-4">
@@ -408,25 +422,77 @@ export default function LibraryEditor() {
           </button>
         </section>
 
+        {/* --- Selected attribute (from Ctrl/Cmd-click in the document) --- */}
+        {selectedAttribute && (
+          <section className="card p-4 border-l-4 border-l-gold-400">
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="text-sm font-semibold text-slate-700">Selected attribute</h3>
+              <button type="button" className="text-xs text-ink-muted hover:underline"
+                      onClick={() => setSelectedAttribute(null)}>clear</button>
+            </div>
+            <code className="text-sm text-navy-700 bg-navy-50 px-2 py-1 rounded inline-block">{selectedAttribute}</code>
+            {(() => {
+              const f = data.merge_field_catalogue.find((m) => m.key === selectedAttribute);
+              return f ? <p className="text-xs text-slate-500 mt-2">{f.label} · {f.group}</p> : null;
+            })()}
+          </section>
+        )}
+
         {/* --- Merge fields --- */}
         <section className="card p-4">
-          <h3 className="text-sm font-semibold text-slate-700 mb-2">Merge fields</h3>
-          <p className="text-xs text-slate-500 mb-2">Click to insert at cursor.</p>
-          <div className="space-y-3 max-h-[35vh] overflow-y-auto">
-            {Object.entries(grouped).map(([group, fields]) => (
-              <div key={group}>
-                <div className="text-xs uppercase tracking-wide text-slate-400 mb-1">{group}</div>
-                <div className="flex flex-wrap gap-1">
-                  {fields.map((f) => (
-                    <button key={f.key} type="button"
-                      onClick={() => handleRef.current?.insertMergeField(f.key)}
-                      className="text-xs px-2 py-1 rounded border border-navy-200 bg-navy-50 text-navy-700 hover:bg-navy-100">
-                      {f.label}
-                    </button>
-                  ))}
+          <div className="flex items-baseline justify-between mb-1">
+            <h3 className="text-sm font-semibold text-slate-700">Merge fields</h3>
+            <span className="text-[11px] text-slate-400">{(data.merge_field_catalogue ?? []).length} attributes</span>
+          </div>
+          <p className="text-xs text-slate-500 mb-2">
+            Click a field to insert its value at the cursor. Hover the ⓘ to see what it means.
+          </p>
+          <input
+            className="input text-sm w-full mb-2"
+            placeholder="Filter attributes…"
+            value={fieldFilter}
+            onChange={(e) => setFieldFilter(e.target.value)}
+          />
+          <div className="space-y-3 max-h-[45vh] overflow-y-auto">
+            {Object.entries(grouped).map(([group, fields]) => {
+              const q = fieldFilter.trim().toLowerCase();
+              const shown = q
+                ? fields.filter((f) => `${f.label} ${f.key} ${group}`.toLowerCase().includes(q))
+                : fields;
+              if (shown.length === 0) return null;
+              return (
+                <div key={group}>
+                  <div className="text-xs uppercase tracking-wide text-slate-400 mb-1">{group}</div>
+                  <ul className="space-y-0.5">
+                    {shown.map((f) => {
+                      const raw = data.merge_fields[f.key];
+                      const val = raw != null && raw !== "" ? String(raw) : "";
+                      return (
+                        <li key={f.key} className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleRef.current?.insertMergeField(f.key, val || undefined)}
+                            className="flex-1 min-w-0 text-left px-2 py-1 rounded hover:bg-navy-50">
+                            <span className="flex items-center justify-between gap-2">
+                              <span className="text-xs font-medium text-navy-700 truncate">{f.label}</span>
+                              <span className="text-[11px] text-slate-500 truncate max-w-[46%] text-right" title={val}>
+                                {val || "—"}
+                              </span>
+                            </span>
+                          </button>
+                          <span
+                            title={MERGE_DESCRIPTIONS[f.key] ?? f.label}
+                            aria-label={MERGE_DESCRIPTIONS[f.key] ?? f.label}
+                            className="shrink-0 grid place-items-center w-4 h-4 rounded-full border border-slate-300 text-[9px] text-slate-500 cursor-help select-none">
+                            i
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
 
@@ -453,20 +519,33 @@ export default function LibraryEditor() {
   );
 }
 
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string));
+}
+
+// Replace every {{token}} with a span that both DISPLAYS the value and REMEMBERS
+// the attribute it came from (data-merge-key), so the editor can show it on
+// hover / Ctrl-click. Unresolved tokens keep their {{key}} text inside the span
+// so the backend can still fill them in at render time.
 function interpolate(html: string, vars: Record<string, any>): string {
-  return html.replace(/\{\{\s*([a-z_][a-z0-9_]*)\s*\}\}/gi, (_, k) =>
-    vars[k] != null && vars[k] !== "" ? String(vars[k]) : `{{${k}}}`);
+  return html.replace(/\{\{\s*([a-z_][a-z0-9_]*)\s*\}\}/gi, (_, k) => {
+    const has = vars[k] != null && vars[k] !== "";
+    const display = has ? String(vars[k]) : `{{${k}}}`;
+    return `<span data-merge-key="${k}" class="merge-field" title="${k}">${escapeHtml(display)}</span>`;
+  });
 }
 
 function roleName(role: string, m: Record<string, any>): string {
   const r = role.toLowerCase();
-  if (r.includes("landlord")) return m.landlord_full_name ?? "";
-  if (r.includes("tenant"))   return m.tenant_full_name ?? "";
+  if (r.includes("landlord"))  return m.landlord_full_name ?? "";
+  if (r.includes("guarantor")) return m.guarantor_name ?? "";
+  if (r.includes("tenant"))    return m.tenant_full_name ?? "";
   return "";
 }
 function roleEmail(role: string, m: Record<string, any>): string {
   const r = role.toLowerCase();
-  if (r.includes("landlord")) return m.landlord_email ?? "";
-  if (r.includes("tenant"))   return m.tenant_email ?? "";
+  if (r.includes("landlord"))  return m.landlord_email ?? "";
+  if (r.includes("guarantor")) return m.guarantor_email ?? "";
+  if (r.includes("tenant"))    return m.tenant_email ?? "";
   return "";
 }

@@ -10,21 +10,28 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { useEffect } from "react";
 
+import { MergeField } from "./mergeFieldMark";
+
 type Props = {
   initialHtml: string;
   onChange: (html: string) => void;
 };
 
 export type EditorHandle = {
-  insertMergeField: (key: string) => void;
+  insertMergeField: (key: string, value?: string) => void;
+  /** Insert a plain {{token}} (no value, no mark) — for base-template editing,
+   *  where the saved template must keep raw tokens for later interpolation. */
+  insertToken: (key: string) => void;
 };
 
 /**
  * A docx-like contract editor. Uses Tiptap (ProseMirror) under the hood.
  * Merge tokens are rendered as styled inline spans like `{{landlord_full_name}}`.
  */
-export function ContractEditor({ initialHtml, onChange, editorRef }: Props & {
+export function ContractEditor({ initialHtml, onChange, editorRef, onSelectMergeField }: Props & {
   editorRef?: (handle: EditorHandle) => void;
+  /** Called with the attribute key when a merge value is Ctrl/Cmd-clicked. */
+  onSelectMergeField?: (key: string) => void;
 }) {
   const editor = useEditor({
     extensions: [
@@ -41,6 +48,7 @@ export function ContractEditor({ initialHtml, onChange, editorRef }: Props & {
       TableRow,
       TableHeader,
       TableCell,
+      MergeField,
     ],
     content: initialHtml,
     onUpdate: ({ editor }) => onChange(editor.getHTML()),
@@ -49,12 +57,40 @@ export function ContractEditor({ initialHtml, onChange, editorRef }: Props & {
   useEffect(() => {
     if (editor && editorRef) {
       editorRef({
-        insertMergeField: (key) => {
+        insertMergeField: (key, value) => {
+          // Insert the RESOLVED VALUE (highlighted + traceable) when we know it,
+          // falling back to the {{token}} only when there's no value yet — the
+          // backend fills those at render time. Either way it carries the key,
+          // so it stays hover / Ctrl-click traceable.
+          const text = value != null && value !== "" ? value : `{{${key}}}`;
+          editor.chain().focus().insertContent({
+            type: "text",
+            text,
+            marks: [{ type: "mergeField", attrs: { key } }],
+          }).run();
+        },
+        insertToken: (key) => {
           editor.chain().focus().insertContent(`{{${key}}}`).run();
         },
       });
     }
   }, [editor, editorRef]);
+
+  // Ctrl/Cmd-click a highlighted merge value → surface its attribute name.
+  useEffect(() => {
+    if (!editor) return;
+    const dom = editor.view.dom as HTMLElement;
+    const onClick = (e: MouseEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const el = (e.target as HTMLElement).closest("[data-merge-key]") as HTMLElement | null;
+      if (el) {
+        e.preventDefault();
+        onSelectMergeField?.(el.getAttribute("data-merge-key") || "");
+      }
+    };
+    dom.addEventListener("mousedown", onClick);
+    return () => dom.removeEventListener("mousedown", onClick);
+  }, [editor, onSelectMergeField]);
 
   if (!editor) return null;
 

@@ -169,7 +169,13 @@
   font-family: 'Inter', system-ui, sans-serif;
   font-size: 14.5px;
   line-height: 1.7;
+  /* Break long unbroken strings (e.g. a run of "____") onto the next line
+     instead of stretching the document width. */
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
+/* Long content inside table cells wraps too, rather than widening the table. */
+.ProseMirror td, .ProseMirror th { overflow-wrap: anywhere; word-break: break-word; }
 .ProseMirror h1 { @apply font-serif text-2xl font-semibold text-ink border-b border-gold-500 pb-2 mb-4 mt-6; }
 .ProseMirror h2 { @apply font-serif text-xl  font-semibold text-ink mt-6 mb-2; }
 .ProseMirror h3 { @apply font-serif text-lg  font-semibold text-ink mt-4 mb-2; }
@@ -188,4 +194,19 @@
   background: white;
   box-shadow: 0 1px 4px rgba(26, 26, 24, 0.06);
   border-radius: 14px;
+}
+
+/* Interpolated merge values — subtly highlighted so an agent can see which text
+   is a merge field. Hover shows the attribute (native title); Ctrl/Cmd-click
+   selects it. This class exists only in the editor; the PDF shell has no such
+   rule, so the final document renders the plain value. */
+.merge-field {
+  background: rgba(201, 162, 76, 0.16);
+  border-bottom: 1px dotted rgba(168, 118, 28, 0.65);
+  border-radius: 2px;
+  padding: 0 1px;
+  cursor: help;
+}
+.merge-field:hover {
+  background: rgba(201, 162, 76, 0.32);
 }
