@@ -69,6 +69,10 @@ export default function Properties() {
             <option value="oldest">Oldest first</option>
             <option value="address">By address</option>
           </select>
+          <Link to="/agent/properties/import" className="btn-secondary"
+                title="Bring a tenancy that's already running onto the system">
+            Import existing
+          </Link>
           <Link to="/agent/properties/new" className="btn-gold">+ New property</Link>
         </div>
       </div>

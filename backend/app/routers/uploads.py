@@ -64,6 +64,9 @@ ALLOWED_BUCKETS = {
     "id_document", "address_doc", "ownership_doc", "incorporation_doc",
     "bank_statements", "visa_snapshot",
     "photos", "floor_plan", "tds_certificate", "passport", "utility_bill",
+    # Evidence for a tenancy imported from another system: the agreements were
+    # signed elsewhere, so the executed PDFs are uploaded rather than produced.
+    "signed_ta", "signed_tc", "inventory",
     "other",
 }
 

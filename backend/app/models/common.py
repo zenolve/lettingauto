@@ -335,3 +335,108 @@ class OfferInput(BaseModel):
     @classmethod
     def _blank_to_none(cls, v):
         return _empty_to_none(v)
+
+
+# ---------------------------------------------------------------------------
+# PG_IM — Import an existing tenancy
+# ---------------------------------------------------------------------------
+class ImportTenantInput(BaseModel):
+    """One sitting tenant on an imported tenancy."""
+
+    full_name: str = Field(..., min_length=2)
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+    is_lead: bool = False
+
+    _blank = field_validator("email", mode="before")(_empty_to_none)
+
+
+class ImportTenancyInput(BaseModel):
+    """An already-running tenancy being brought onto the system.
+
+    Deliberately mirrors what the pipeline would have collected on the way
+    through, because an imported tenancy is NOT a special kind of record: the
+    same Property / Landlord / Tenant rows are created and the same stage gates
+    are then walked. The difference is only that the evidence is declared
+    up-front instead of being produced stage by stage.
+
+    Every ``*_signed`` / ``*_served`` field is an assertion by the agent about
+    something that already happened offline. They map onto exactly the flags
+    the gates read, so a tenancy that is genuinely complete advances to Live on
+    its own merits — and one that isn't stops where the evidence runs out.
+    """
+
+    # --- Property ---------------------------------------------------------
+    address: str = Field(..., min_length=3)
+    post_code: str
+    property_type: Optional[str] = None
+
+    # --- Landlord ---------------------------------------------------------
+    landlord_full_name: str = Field(..., min_length=2)
+    landlord_email: EmailStr
+
+    # --- Tenants ----------------------------------------------------------
+    tenants: list[ImportTenantInput] = Field(..., min_length=1)
+    guarantor_name: Optional[str] = None
+    guarantor_email: Optional[EmailStr] = None
+
+    # --- Tenancy terms ----------------------------------------------------
+    rent_amount: float = Field(..., gt=0, description="One rent payment, per rent_frequency")
+    rent_frequency: Literal["Monthly", "Weekly"] = "Monthly"
+    start_date: date
+    end_date: Optional[date] = None          # None = periodic
+    deposit_amount: Optional[float] = None
+    # Left unset, the tenancy type is derived from the annualised rent (the
+    # Housing Act 1988 GBP 100k threshold) exactly as take-on does.
+    tenancy_type: Optional[Literal["APT", "Common Law"]] = None
+    service_level: Optional[Literal["Full Management", "Rent Collection", "Let Only"]] = None
+
+    # --- Compliance certificates -----------------------------------------
+    gas_cert_expiry: Optional[date] = None
+    epc_rating: Optional[str] = None
+    eicr_expiry: Optional[date] = None
+    hmo_licence_confirmed: bool = False
+
+    # --- Deposit protection ----------------------------------------------
+    deposit_registered: bool = False
+    deposit_registration_date: Optional[date] = None
+    tds_cert_on_file: bool = False
+
+    # --- What has already been signed / served ---------------------------
+    tc_signed: bool = False
+    ta_landlord_signed: bool = False
+    ta_tenants_signed: bool = False
+    how_to_rent_served: bool = False
+    gas_cert_served: bool = False
+    epc_served: bool = False
+    eicr_served: bool = False
+    tds_info_served: bool = False
+    rra_sheet_served: bool = False
+
+    # --- Pre-move-in ------------------------------------------------------
+    funds_cleared: bool = True          # a running tenancy has, by definition
+    works_signed_off: bool = True
+    inventory_clerk: Optional[str] = None
+
+    notes: Optional[str] = None
+
+    _blank_email = field_validator(
+        "landlord_email", "guarantor_email", mode="before",
+    )(_empty_to_none)
+    _blank_dates = field_validator(
+        "end_date", "gas_cert_expiry", "eicr_expiry", "deposit_registration_date",
+        mode="before",
+    )(_empty_to_none)
+    _blank_nums = field_validator("deposit_amount", mode="before")(_empty_to_none)
+    _blank_text = field_validator(
+        "property_type", "epc_rating", "service_level", "tenancy_type",
+        "inventory_clerk", "guarantor_name", "notes", mode="before",
+    )(_empty_to_none)
+
+    @field_validator("end_date")
+    @classmethod
+    def _end_after_start(cls, v, info):
+        start = info.data.get("start_date")
+        if v and start and v <= start:
+            raise ValueError("end_date must be after start_date")
+        return v

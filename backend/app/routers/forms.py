@@ -19,12 +19,16 @@ from app.handlers.pg03_offer import handle_offer
 from app.handlers.pg05_tenant_pack import handle_tenant_pack
 from app.handlers.pg06_scheduler import run_scheduler
 from app.handlers.pg07_rra_batch import handle_rra_batch
+from app.core.logger import get_logger
 from app.models.common import (
+    ImportTenancyInput,
     LandlordAdminInput,
     LandlordVerificationInput,
     OfferInput,
     PropertyTakeonInput,
 )
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/forms", tags=["forms"])
 
@@ -204,6 +208,30 @@ def _require_checklist_complete(property_id: str, action: str) -> None:
             f"Tenancy checklist incomplete — '{action}' requires every item ticked. "
             f"Outstanding: {preview}{more}.",
         )
+
+
+@router.post("/import-tenancy", status_code=status.HTTP_201_CREATED)
+async def submit_import_tenancy(
+    payload: ImportTenancyInput,
+    agent: Agent = Depends(require_agent),
+) -> dict:
+    """Bring an already-running tenancy onto the system.
+
+    Unlike take-on this is NOT pay-first: an existing tenancy is migration, not
+    a new instruction, so no Stripe intent is created and the records are
+    written immediately. (Whether imports should ever be chargeable is a
+    pricing decision, not a technical one - see docs/BUSINESS_MODEL.md.)
+
+    The response reports which stage the tenancy reached and, if it stopped
+    short of Live, exactly what evidence is missing.
+    """
+    from app.handlers.pg_import import handle_import  # noqa: PLC0415 - avoid load cycle
+
+    result = await handle_import(payload, agent_email=getattr(agent, "email", None))
+    logger.info("forms.import_tenancy property=%s stage=%s by=%s",
+                result["property_id"], result["stage_reached"],
+                getattr(agent, "email", "?"))
+    return result
 
 
 @router.post("/offer/{property_id}", status_code=status.HTTP_201_CREATED)

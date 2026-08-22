@@ -39,6 +39,10 @@ const BUCKET_LABEL: Record<string, string> = {
   tds_certificate:    "TDS deposit certificate",
   passport:           "Tenant passport",
   utility_bill:       "Tenant utility bill",
+  // Executed paperwork for a tenancy imported from another system.
+  signed_ta:          "Signed tenancy agreement",
+  signed_tc:          "Signed terms of business",
+  inventory:          "Inventory / check-in report",
   other:              "Other",
 };
 

@@ -10,6 +10,7 @@ import LandlordAdmin from "./pages/forms/LandlordAdmin";
 import LandlordVerification from "./pages/forms/LandlordVerification";
 import MoveIn from "./pages/forms/MoveIn";
 import Offer from "./pages/forms/Offer";
+import ImportTenancy from "./pages/forms/ImportTenancy";
 import PropertyTakeon from "./pages/forms/PropertyTakeon";
 import LibraryEditor from "./pages/LibraryEditor";
 import LibraryIndex from "./pages/LibraryIndex";
@@ -47,6 +48,7 @@ export default function App() {
         <Route path="/agent/library" element={<LibraryIndex />} />
         <Route path="/agent/library/:docId" element={<TemplateEditor />} />
         <Route path="/agent/properties/new" element={<PropertyTakeon />} />
+        <Route path="/agent/properties/import" element={<ImportTenancy />} />
         <Route path="/agent/takeon/complete" element={<TakeonComplete />} />
         <Route path="/agent/properties/:id" element={<PropertyDetail />} />
         <Route path="/agent/properties/:id/uploads" element={<PropertyUploads />} />
