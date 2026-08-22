@@ -1,0 +1,8 @@
+{% extends "_base.html" %}
+{% block body %}
+  <h2 style="margin:0 0 12px 0;color:{{ brand_navy }};font-size:20px;">Update on your offer</h2>
+  <p>Dear {{ tenant_name or "applicant" }},</p>
+  <p>Thank you for your offer on <strong>{{ property_address }}</strong>. Unfortunately, on this occasion it has not been successful{% if close_reason %} ({{ close_reason }}){% endif %}.</p>
+  <p>We're sorry for the disappointing news. If you'd like, we'd be happy to help you find another property — just get in touch.</p>
+  <p>Kind regards,<br>{{ agency_name }}</p>
+{% endblock %}

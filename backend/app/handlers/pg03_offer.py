@@ -313,6 +313,18 @@ async def handle_offer(property_id: str, payload: OfferInput) -> dict:
     except Exception as e:  # noqa: BLE001
         logger.error("offer.row_create_failed err=%s", e)
 
+    # 4b-i. Confirm receipt to the lead applicant (best-effort).
+    if offer_id:
+        try:
+            from app.services.offers import email_lead_tenant  # noqa: PLC0415 — avoid cycle
+            await email_lead_tenant(
+                at.get(at.TableNames.OFFERS, offer_id).get("fields", {}),
+                template="E14_offer_received_tenant.html",
+                subject="We've recorded your offer",
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.warning("offer.tenant_confirmation_failed err=%s", e)
+
     # 4c. Record the offer-letter send in Sent_Documents (Stage 4). Status is
     #     flipped to Signed/Declined by PG_04 when the landlord responds.
     if docuseal_response:

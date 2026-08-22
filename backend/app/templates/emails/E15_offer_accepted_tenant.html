@@ -1,0 +1,20 @@
+{% extends "_base.html" %}
+{% import "_macros.html" as m %}
+{% block body %}
+  <h2 style="margin:0 0 12px 0;color:{{ brand_navy }};font-size:20px;">Your offer has been accepted</h2>
+  <p>Dear {{ tenant_name or "applicant" }},</p>
+  <p>Good news — your offer on <strong>{{ property_address }}</strong> has been accepted. The agreed terms are:</p>
+
+  {{ m.kv_table([
+       ("Property",        property_address),
+       ("Rent",            offered_rent),
+       ("Frequency",       rent_frequency),
+       ("Deposit",         deposit),
+       ("Holding deposit", holding_deposit),
+       ("Start date",      start_date),
+       ("Term",            tenancy_term),
+  ]) }}
+
+  <p>We'll now move on to referencing and the tenancy paperwork, and will be in touch shortly with what's needed from you.</p>
+  <p>Kind regards,<br>{{ agency_name }}</p>
+{% endblock %}

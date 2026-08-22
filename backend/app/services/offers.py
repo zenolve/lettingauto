@@ -33,6 +33,58 @@ CLOSED_STATUSES = {
 }
 
 
+def _money(v: Any) -> str:
+    if v in (None, ""):
+        return ""
+    try:
+        return f"£{float(v):,.2f}"
+    except (TypeError, ValueError):
+        return str(v)
+
+
+async def email_lead_tenant(offer_fields: dict, *, template: str, subject: str) -> None:
+    """Best-effort email to the offer's lead (first) tenant about their offer —
+    the submission / acceptance / rejection confirmations. Silently no-ops if the
+    lead tenant has no email on file, and never raises into the caller."""
+    tenant_ids = offer_fields.get("Tenants") or []
+    if not tenant_ids:
+        return
+    try:
+        tf = at.get(at.TableNames.TENANTS, tenant_ids[0]).get("fields", {})
+    except Exception:  # noqa: BLE001
+        return
+    email = (tf.get("Tenant Email") or "").strip()
+    if not email:
+        logger.info("offers.tenant_email_skip no email tenant=%s", tenant_ids[0])
+        return
+    addr = ""
+    prop_ids = offer_fields.get("Property") or []
+    if prop_ids:
+        try:
+            addr = at.get(at.TableNames.PROPERTIES, prop_ids[0]).get("fields", {}).get("Address", "")
+        except Exception:  # noqa: BLE001
+            pass
+    ctx = {
+        "tenant_name": tf.get("Name", ""),
+        "property_address": addr,
+        "offered_rent": _money(offer_fields.get("Offered Rent")),
+        "rent_frequency": offer_fields.get("Rent Frequency", ""),
+        "deposit": _money(offer_fields.get("Deposit")),
+        "holding_deposit": _money(offer_fields.get("Holding Deposit")),
+        "start_date": offer_fields.get("Start Date", ""),
+        "tenancy_term": offer_fields.get("Tenancy Term", "") or "Periodic",
+        "close_reason": offer_fields.get("Close Reason", ""),
+    }
+    from app.core.email_client import render, send_email  # noqa: PLC0415 — avoid cycle
+    try:
+        html = render(template, **ctx)
+        subj = f"{subject} — {addr}" if addr else subject
+        await send_email(email, subject=subj, html=html)
+        logger.info("offers.tenant_email_sent template=%s to=%s", template, email)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("offers.tenant_email_failed template=%s err=%s", template, e)
+
+
 # ---------------------------------------------------------------------------
 # Lookups
 # ---------------------------------------------------------------------------
@@ -132,6 +184,7 @@ async def accept_offer(offer_id: str, *, source: str = "manual") -> dict[str, An
 
     from app.handlers.pg00_gate import evaluate_gate  # local — avoid load cycle
     gate = await evaluate_gate(property_id, target_stage=5, source=f"Offer accepted ({source})")
+    await email_lead_tenant(of, template="E15_offer_accepted_tenant.html", subject="Your offer has been accepted")
     logger.info("offers.accepted id=%s property=%s source=%s", offer_id, property_id, source)
     return {"offer_id": offer_id, "property_id": property_id, "status": "Accepted", "gate": gate.to_dict()}
 
@@ -201,6 +254,13 @@ async def close_offer(
                 "Gate Block Reason": "",
             })
             rolled_back = True
+
+    if status == "Rejected_By_Landlord":
+        await email_lead_tenant(
+            {**of, "Close Reason": reason or of.get("Close Reason", "")},
+            template="E16_offer_rejected_tenant.html",
+            subject="Update on your offer",
+        )
 
     logger.info("offers.closed id=%s status=%s rolled_back=%s source=%s",
                 offer_id, status, rolled_back, source)
