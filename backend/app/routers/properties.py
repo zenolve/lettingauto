@@ -328,6 +328,17 @@ PATCHABLE_FLAGS: dict[str, dict[str, Any]] = {
 }
 
 
+# Certificate renewal -> re-serve prompt. The rules and side-effects live in
+# services/cert_renewal so the upload route shares them (a replacement cert can
+# arrive either way).
+from app.services.cert_renewal import (  # noqa: E402 - keep near its use site
+    RENEWAL_WATCH as _RENEWAL_WATCH,
+    detect_renewals as _detect_cert_renewals,
+    notice_for as _renewal_notice,
+    raise_reserve_diary as _raise_reserve_diary,
+)
+
+
 @router.get("/flags-catalog")
 def flags_catalog(_: Agent = Depends(require_agent)) -> dict[str, Any]:
     """Tell the frontend which flags exist + their metadata.
@@ -378,6 +389,14 @@ def patch_flags(
 
     today = _date.today().isoformat()
 
+    # Only needed to spot a certificate renewal, so only read on that path.
+    before: dict[str, Any] = {}
+    if any(k in _RENEWAL_WATCH for k in body):
+        try:
+            before = at.get(at.TableNames.PROPERTIES, property_id).get("fields", {})
+        except KeyError:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Property not found")
+
     payload: dict[str, Any] = {}
     for k, raw in body.items():
         meta = PATCHABLE_FLAGS[k]
@@ -413,6 +432,12 @@ def patch_flags(
 
             raise HTTPException(500, f"Unknown field type {t!r} for {k}")
 
+    # A renewed certificate supersedes the copy the tenant already holds, so the
+    # served record is no longer true - clear it in the same write and prompt.
+    renewals = _detect_cert_renewals(payload, before) if before else []
+    for served_flag, _doc, _dtype in renewals:
+        payload[served_flag] = False
+
     try:
         at.update(at.TableNames.PROPERTIES, property_id, payload)
     except KeyError:
@@ -420,12 +445,22 @@ def patch_flags(
     except Exception as e:  # noqa: BLE001
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Update rejected: {e}")
 
+    notices: list[str] = []
+    if renewals:
+        address = before.get("Address", "")
+        for _flag, doc_name, diary_type in renewals:
+            _raise_reserve_diary(property_id, address, doc_name, diary_type)
+            notices.append(_renewal_notice(doc_name))
+        logger.info("properties.cert_renewal property=%s docs=%s",
+                    property_id, [d for _f, d, _t in renewals])
+
     # Re-read so the client sees Airtable's normalised values (e.g. a
     # boolean field returns False as the literal key being absent).
     fresh = at.get(at.TableNames.PROPERTIES, property_id).get("fields", {})
     return {
         "property_id": property_id,
         "updated": {k: fresh.get(k) for k in payload},
+        "notices": notices,
     }
 
 

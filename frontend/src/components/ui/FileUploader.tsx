@@ -4,6 +4,16 @@ import { api } from "../../lib/api";
 
 type UploadedFile = { filename: string; size: number; url: string };
 
+// Buckets whose file is only meaningful alongside its expiry date. Capturing
+// the date with the upload is what stops the stored certificate and the
+// property's expiry field drifting apart — and it's the moment the sitting
+// tenant's copy becomes superseded, so it drives the re-serve prompt.
+// Mirrors BUCKET_EXPIRY_FIELD in backend/app/services/cert_renewal.py.
+const CERT_EXPIRY_LABEL: Record<string, string> = {
+  gas_cert: "Expiry date on this gas safety certificate",
+  eicr: "Expiry date on this EICR",
+};
+
 type Props = {
   /** Property id (recXXX). */
   propertyId: string;
@@ -30,7 +40,10 @@ export function FileUploader({ propertyId, bucket, label, hint, accept, multiple
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [expiry, setExpiry] = useState("");
+  const [notices, setNotices] = useState<string[]>([]);
   const fileInput = useRef<HTMLInputElement | null>(null);
+  const expiryLabel = CERT_EXPIRY_LABEL[bucket];
 
   async function refresh() {
     try {
@@ -49,15 +62,25 @@ export function FileUploader({ propertyId, bucket, label, hint, accept, multiple
 
   async function uploadFiles(picked: FileList | null) {
     if (!picked || picked.length === 0) return;
-    setUploading(true); setErr(null);
+    if (expiryLabel && !expiry) {
+      setErr("Enter the expiry date shown on the certificate first — it's stored with the file so the two can't drift apart.");
+      if (fileInput.current) fileInput.current.value = "";
+      return;
+    }
+    setUploading(true); setErr(null); setNotices([]);
     try {
+      const seen: string[] = [];
       for (const f of Array.from(picked)) {
         const form = new FormData();
         form.append("file", f, f.name);
-        await api.post(`/api/uploads/agent/${propertyId}/${bucket}`, form, {
+        if (expiryLabel && expiry) form.append("expiry", expiry);
+        const { data } = await api.post(`/api/uploads/agent/${propertyId}/${bucket}`, form, {
           headers: { "Content-Type": "multipart/form-data" },
         });
+        // e.g. "Gas Safety Certificate renewed - serve the new copy…"
+        for (const n of data?.notices ?? []) if (!seen.includes(n)) seen.push(n);
       }
+      setNotices(seen);
       await refresh();
     } catch (e: any) {
       setErr(e?.response?.data?.detail ?? "Upload failed");
@@ -74,6 +97,28 @@ export function FileUploader({ propertyId, bucket, label, hint, accept, multiple
         <span className="text-xs text-slate-400">{files.length} file{files.length === 1 ? "" : "s"}</span>
       </div>
       {hint && <p className="text-xs text-slate-500 mb-3">{hint}</p>}
+
+      {expiryLabel && (
+        <label className="block mb-3">
+          <span className="text-xs text-ink-soft">{expiryLabel}</span>
+          <input
+            type="date"
+            className="input text-sm w-full mt-1"
+            value={expiry}
+            onChange={(e) => { setExpiry(e.target.value); setErr(null); }}
+          />
+          <span className="text-[11px] text-ink-muted">
+            Saved against the property with the file. If this replaces a certificate the tenant
+            already holds, they must be served the new copy within 28 days of the inspection.
+          </span>
+        </label>
+      )}
+
+      {notices.map((n, i) => (
+        <div key={i} className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-2.5 py-1.5 mb-3">
+          {n}
+        </div>
+      ))}
 
       <label
         className={`block border-2 border-dashed rounded-md p-4 text-center text-sm cursor-pointer transition-colors ${

@@ -573,6 +573,19 @@ function Stage8Live({ id, data, refresh }: { id: string; data: PD; refresh: () =
     "TDS_Info_Served",
     ...(isApt ? ["RRA_Sheet_Served"] : []),
   ];
+  // On a live tenancy these are all ticked (the 7 -> 8 gate required it), so an
+  // unticked one means the document has been superseded since - a renewed gas
+  // certificate or EICR clears its own served record on the backend. The new
+  // copy is owed to the tenant within 28 days of the inspection.
+  const SERVED_LABEL: Record<string, string> = {
+    How_To_Rent_Served: "How to Rent guide",
+    Gas_Cert_Served: "Gas Safety Certificate",
+    EPC_Served: "EPC",
+    EICR_Served: "EICR",
+    TDS_Info_Served: "Deposit prescribed information",
+    RRA_Sheet_Served: "RRA information sheet",
+  };
+  const unserved = servedFlags.filter((k) => !f[k]);
   return (
     <div className="grid md:grid-cols-2 gap-6">
       <Card title="Tenancy">
@@ -586,15 +599,54 @@ function Stage8Live({ id, data, refresh }: { id: string; data: PD; refresh: () =
         ) : <span className="text-sm text-slate-500">No tenant linked.</span>}
       </Card>
       <DiaryCard propertyId={id} />
+      {/* Every one of these was a gate condition for entering Stage 8, so on a
+          live tenancy they are always already ticked. Kept purely as a
+          correction path and collapsed by default — as an open checklist it
+          read as outstanding work that had in fact been done at Stage 7. */}
+      {unserved.length > 0 && (
+        <section className="card p-5 md:col-span-2 border-l-4 border-l-amber-400 bg-amber-50/40">
+          <h3 className="font-serif text-base font-semibold text-amber-900">
+            Document{unserved.length === 1 ? "" : "s"} to serve to the tenant
+          </h3>
+          <p className="text-xs text-amber-800 mt-1">
+            These were served at move-in but have since been superseded — most often because the
+            certificate was renewed. The tenant must be given the new copy
+            <strong> within 28 days of the inspection</strong>.
+          </p>
+          <ul className="mt-3 space-y-1">
+            {unserved.map((k) => (
+              <li key={k} className="text-sm text-ink-soft">• {SERVED_LABEL[k] ?? k}</li>
+            ))}
+          </ul>
+          <Link to={`/agent/properties/${id}/move-in`} className="btn-primary inline-block mt-3">
+            Re-send tenant pack →
+          </Link>
+          <p className="text-[11px] text-amber-800/80 mt-2">
+            The pack is sent as a whole — the tenant receives the current version of every
+            document, not just the one listed above.
+          </p>
+        </section>
+      )}
+
       <div className="md:col-span-2">
-        <PropertyFlags
-          propertyId={id}
-          fields={f}
-          show={servedFlags}
-          title="Prescribed documents served"
-          description="The tenant-pack flow auto-ticks these. Override here if a document was served outside the system or to correct a missed event."
-          onUpdated={refresh}
-        />
+        <details className="group" open={unserved.length > 0}>
+          <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden inline-flex items-center gap-1.5 text-sm text-navy-600 hover:underline">
+            <span className="transition-transform group-open:rotate-90">&rsaquo;</span>
+            Correct a served-document record
+          </summary>
+          <p className="text-xs text-ink-muted mt-2 mb-3">
+            All prescribed documents were served before this tenancy went live — the stage gate
+            required it. Use this only to correct the record (e.g. a document served outside the
+            system). Changing a tick here updates the record only; it doesn't send anything.
+          </p>
+          <PropertyFlags
+            propertyId={id}
+            fields={f}
+            show={servedFlags}
+            title="Served-document records"
+            onUpdated={refresh}
+          />
+        </details>
       </div>
       <section className="card p-5 md:col-span-2">
         <h3 className="text-sm uppercase tracking-wide text-slate-500 mb-3">Send during the tenancy</h3>

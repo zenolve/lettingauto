@@ -29,13 +29,15 @@ from __future__ import annotations
 
 import re
 import secrets
+from datetime import date as _date
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 
 from app.core.auth import Agent, decode_form_token, require_agent
 from app.core.logger import get_logger
+from app.services.cert_renewal import BUCKET_EXPIRY_FIELD, apply_expiry_update
 
 logger = get_logger(__name__)
 
@@ -109,12 +111,38 @@ def _public_url(property_id: str, bucket: str, filename: str) -> str:
     return f"{base}{rel}" if base else rel
 
 
+def _apply_cert_expiry(property_id: str, bucket: str, expiry: str | None) -> dict:
+    """For certificate buckets, keep the file and its expiry date together.
+
+    A replacement gas cert / EICR is the moment the tenant's copy becomes
+    superseded, so the expiry belongs to the upload rather than a separate edit
+    the agent might never make. Returns extra response keys: any re-serve
+    notices, plus ``expiry_required`` so the UI knows to prompt when the date
+    was omitted.
+    """
+    field = BUCKET_EXPIRY_FIELD.get(bucket)
+    if not field:
+        return {}
+    if not expiry:
+        # Don't reject the upload - the file is safely stored either way; ask
+        # for the date instead so the two can be reconciled immediately.
+        return {"expiry_required": True, "expiry_field": field}
+    try:
+        _date.fromisoformat(expiry)
+    except ValueError:
+        return {"expiry_required": True, "expiry_field": field,
+                "expiry_error": "Expected a date as YYYY-MM-DD."}
+    notices = apply_expiry_update(property_id, field, expiry)
+    return {"expiry_recorded": expiry, "notices": notices}
+
+
 @router.post("/{property_id}/{bucket}", status_code=status.HTTP_201_CREATED)
 async def upload_file(
     property_id: str,
     bucket: str,
     file: UploadFile = File(...),
     token: str = Query(..., description="Form token minted for this property"),
+    expiry: str | None = Form(None, description="Expiry date (YYYY-MM-DD) for certificate buckets"),
 ) -> dict:
     """Public upload (used by the landlord admin/verification form pages).
 
@@ -157,6 +185,7 @@ async def upload_file(
         "filename": original,
         "size": len(contents),
         "content_type": file.content_type,
+        **_apply_cert_expiry(property_id, bucket, expiry),
     }
 
 
@@ -165,6 +194,7 @@ async def upload_file_as_agent(
     property_id: str,
     bucket: str,
     file: UploadFile = File(...),
+    expiry: str | None = Form(None, description="Expiry date (YYYY-MM-DD) for certificate buckets"),
     _: Agent = Depends(require_agent),
 ) -> dict:
     """Agent-authenticated upload variant. Same shape as the public route."""
@@ -199,6 +229,7 @@ async def upload_file_as_agent(
         "filename": original,
         "size": len(contents),
         "content_type": file.content_type,
+        **_apply_cert_expiry(property_id, bucket, expiry),
     }
 
 

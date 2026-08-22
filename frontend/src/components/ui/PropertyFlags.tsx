@@ -80,6 +80,7 @@ export function PropertyFlags({
   const [local, setLocal] = useState<Record<string, any>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [notices, setNotices] = useState<string[]>([]);
   // Track text edits separately so users can type freely without firing
   // a PATCH per keystroke; commit on blur or Enter.
   const [textDraft, setTextDraft] = useState<Record<string, string>>({});
@@ -130,7 +131,7 @@ export function PropertyFlags({
       if (!ok) return;
     }
 
-    setBusy(name); setErr(null);
+    setBusy(name); setErr(null); setNotices([]);
     // Optimistic local update
     setLocal((cur) => ({ ...cur, [name]: raw }));
     try {
@@ -139,6 +140,10 @@ export function PropertyFlags({
       // e.g. False as the key being absent — so we read whatever came back).
       const updated = data.updated ?? {};
       setLocal((cur) => ({ ...cur, ...updated }));
+      // Side-effects the server applied on top of the edit (e.g. a renewed
+      // certificate clearing its "served" record) come back as notices so the
+      // agent sees why another field just changed.
+      setNotices(data.notices ?? []);
       onUpdated?.(updated);
     } catch (e: any) {
       // Revert optimistic update on failure
@@ -164,6 +169,12 @@ export function PropertyFlags({
           {err}
         </div>
       )}
+
+      {notices.map((n, i) => (
+        <div key={i} className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-2.5 py-1.5">
+          {n}
+        </div>
+      ))}
 
       <ul className="space-y-2.5">
         {rows.map((row) => {
