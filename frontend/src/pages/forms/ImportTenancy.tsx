@@ -14,6 +14,17 @@ type FormValues = {
   property_type: string;
   landlord_full_name: string;
   landlord_email: string;
+  landlord_full_address: string;
+  landlord_post_code: string;
+  landlord_mobile: string;
+  residency: "" | "UK Resident" | "Non-resident (overseas)";
+  nrl_approval_number: string;
+  bank_name: string;
+  sort_code: string;
+  account_name: string;
+  account_number: string;
+  smoke_detectors_fitted: "" | "Yes" | "No";
+  furniture_fire_regs: "" | "Yes" | "No";
   tenants: TenantRow[];
   /** Index of the lead tenant — mapped onto is_lead when submitting. */
   lead_index: number;
@@ -45,8 +56,11 @@ type FormValues = {
   notes: string;
 };
 
+type Compliance = { warnings: string[]; actions: string[]; flags: string[] };
+
 type ImportResult = {
   property_id: string;
+  compliance?: Compliance;
   stage_reached: number;
   blocked_at: number | null;
   blockers: string[];
@@ -69,6 +83,9 @@ export default function ImportTenancy() {
         tenancy_type: "",
         service_level: "",
         lead_index: 0,
+        residency: "",
+        smoke_detectors_fitted: "",
+        furniture_fire_regs: "",
         tenants: [{ full_name: "", email: "" }],
       },
     });
@@ -86,6 +103,9 @@ export default function ImportTenancy() {
         ...v,
         tenancy_type: v.tenancy_type || null,
         service_level: v.service_level || null,
+        residency: v.residency || null,
+        smoke_detectors_fitted: v.smoke_detectors_fitted || null,
+        furniture_fire_regs: v.furniture_fire_regs || null,
         deposit_amount: v.deposit_amount === "" ? null : Number(v.deposit_amount),
         rent_amount: Number(v.rent_amount),
         tenants: v.tenants
@@ -130,6 +150,32 @@ export default function ImportTenancy() {
             </p>
           </div>
         )}
+
+        {(result.compliance?.warnings?.length || result.compliance?.actions?.length) ? (
+          <div className="card p-5 border-l-4 border-l-rose-400">
+            <h3 className="font-serif text-base font-semibold text-navy-700">
+              Compliance findings on this tenancy
+            </h3>
+            <p className="text-xs text-ink-muted mt-1">
+              Found by running the same checks a new tenancy gets. These describe the tenancy as it
+              stands today — they aren't import errors.
+            </p>
+            {result.compliance?.warnings?.length ? (
+              <ul className="mt-3 space-y-1">
+                {result.compliance.warnings.map((w, i) => (
+                  <li key={i} className="text-sm text-rose-800">• {w}</li>
+                ))}
+              </ul>
+            ) : null}
+            {result.compliance?.actions?.length ? (
+              <ul className="mt-3 space-y-1">
+                {result.compliance.actions.map((a, i) => (
+                  <li key={i} className="text-sm text-amber-800">• {a}</li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="card p-5">
           <h3 className="font-serif text-base font-semibold text-navy-700">Attach the paperwork</h3>
@@ -194,6 +240,38 @@ export default function ImportTenancy() {
         <Field label="Email" required error={errors.landlord_email?.message}>
           <input className="input" type="email" {...register("landlord_email", { required: "Required" })} />
         </Field>
+        <Field label="Correspondence address"
+               hint="Deposit prescribed information must carry the landlord's address">
+          <input className="input" {...register("landlord_full_address")} />
+        </Field>
+        <Field label="Landlord postcode">
+          <input className="input" {...register("landlord_post_code")} />
+        </Field>
+        <Field label="Mobile">
+          <input className="input" {...register("landlord_mobile")} />
+        </Field>
+      </Section>
+
+      <Section title="Residency & tax"
+               description="A non-resident landlord without an HMRC approval number means 20% withholding applies. Left blank this defaults to UK resident, so an overseas landlord would be taxed incorrectly.">
+        <Field label="UK resident or non-resident?">
+          <select className="input" {...register("residency")}>
+            <option value="">—</option>
+            <option>UK Resident</option>
+            <option>Non-resident (overseas)</option>
+          </select>
+        </Field>
+        <Field label="NRL approval number" hint="If HMRC has approved gross rent">
+          <input className="input" {...register("nrl_approval_number")} />
+        </Field>
+      </Section>
+
+      <Section title="Landlord payout"
+               description="Needed to disburse rent under Full Management or Rent Collection.">
+        <Field label="Bank name"><input className="input" {...register("bank_name")} /></Field>
+        <Field label="Account name"><input className="input" {...register("account_name")} /></Field>
+        <Field label="Sort code"><input className="input" placeholder="00-00-00" {...register("sort_code")} /></Field>
+        <Field label="Account number"><input className="input" {...register("account_number")} /></Field>
       </Section>
 
       <section className="card p-6 md:p-7 space-y-4">
@@ -278,6 +356,16 @@ export default function ImportTenancy() {
         <label className="flex items-center gap-2 text-sm text-ink-soft self-end pb-2">
           <input type="checkbox" {...register("hmo_licence_confirmed")} /> HMO licence confirmed
         </label>
+        <Field label="Smoke detectors fitted?">
+          <select className="input" {...register("smoke_detectors_fitted")}>
+            <option value="">—</option><option>Yes</option><option>No</option>
+          </select>
+        </Field>
+        <Field label="Furniture meets fire regulations?">
+          <select className="input" {...register("furniture_fire_regs")}>
+            <option value="">—</option><option>Yes</option><option>No</option>
+          </select>
+        </Field>
       </Section>
 
       <Section title="Deposit protection">

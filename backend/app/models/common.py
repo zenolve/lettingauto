@@ -374,6 +374,33 @@ class ImportTenancyInput(BaseModel):
     # --- Landlord ---------------------------------------------------------
     landlord_full_name: str = Field(..., min_length=2)
     landlord_email: EmailStr
+    # Correspondence address is not optional in practice: the deposit
+    # prescribed information must carry the landlord's name and address, so a
+    # landlord we can't address can't have that information validly reissued.
+    landlord_full_address: Optional[str] = None
+    landlord_post_code: Optional[str] = None
+    landlord_mobile: Optional[str] = None
+
+    # --- Residency / tax --------------------------------------------------
+    # Drives the 20% non-resident landlord withholding. Left blank, the
+    # derivation treats the landlord as UK-resident, which is the silent
+    # failure mode: an overseas landlord imported without this is taxed wrongly
+    # and nobody finds out. Values match the landlord admin form.
+    residency: Optional[Literal["UK Resident", "Non-resident (overseas)"]] = None
+    nrl_approval_number: Optional[str] = None
+
+    # --- Payout details ---------------------------------------------------
+    # Under Full Management the agency collects rent and pays the landlord;
+    # without these an imported landlord simply cannot be paid.
+    bank_name: Optional[str] = None
+    sort_code: Optional[str] = None
+    account_name: Optional[str] = None
+    account_number: Optional[str] = None
+
+    # --- Safety -----------------------------------------------------------
+    # Read by the compliance checks. Unset means "not asked", not "compliant".
+    smoke_detectors_fitted: Optional[YesNo] = None
+    furniture_fire_regs: Optional[YesNo] = None
 
     # --- Tenants ----------------------------------------------------------
     tenants: list[ImportTenantInput] = Field(..., min_length=1)
@@ -430,7 +457,11 @@ class ImportTenancyInput(BaseModel):
     _blank_nums = field_validator("deposit_amount", mode="before")(_empty_to_none)
     _blank_text = field_validator(
         "property_type", "epc_rating", "service_level", "tenancy_type",
-        "inventory_clerk", "guarantor_name", "notes", mode="before",
+        "inventory_clerk", "guarantor_name", "notes",
+        "landlord_full_address", "landlord_post_code", "landlord_mobile",
+        "residency", "nrl_approval_number",
+        "bank_name", "sort_code", "account_name", "account_number",
+        "smoke_detectors_fitted", "furniture_fire_regs", mode="before",
     )(_empty_to_none)
 
     @field_validator("end_date")

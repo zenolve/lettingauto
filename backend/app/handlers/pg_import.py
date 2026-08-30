@@ -28,7 +28,12 @@ from app.core.logger import get_logger
 from app.db import supabase_client as at
 from app.handlers.pg00_gate import evaluate_gate, find_stage_by_order
 from app.models.common import ImportTenancyInput
-from app.services.derivations import derive_tenancy_type
+from app.services.compliance import run_checks
+from app.services.derivations import (
+    derive_tenancy_type,
+    is_overseas,
+    nrl_withholding_active,
+)
 
 logger = get_logger(__name__)
 
@@ -62,6 +67,35 @@ def _tenancy_term(payload: ImportTenancyInput) -> str:
         return "Periodic"
     months = round((payload.end_date - payload.start_date).days / 30.44)
     return f"{months} months"
+
+
+def _compliance_report(payload: ImportTenancyInput, *, gas_status, epc_status, eicr_status) -> dict:
+    """Run the same compliance checks the landlord admin form runs.
+
+    The pitch for importing into a compliance system is that gaps in the
+    existing portfolio surface immediately, so the import reports them at the
+    point of import rather than waiting for someone to open the property.
+    """
+    report = run_checks(admin={
+        "residency": payload.residency,
+        "nrl_approval_number": payload.nrl_approval_number,
+        "gas_cert_status": gas_status,
+        "gas_cert_expiry": payload.gas_cert_expiry,
+        "epc_status": epc_status,
+        "epc_rating": payload.epc_rating,
+        "eicr_status": eicr_status,
+        "eicr_expiry": payload.eicr_expiry,
+        "smoke_detectors": payload.smoke_detectors_fitted,
+        "furniture_fire": payload.furniture_fire_regs,
+        "service_level": payload.service_level,
+        # Passed so the payout check reads the details actually supplied -
+        # omitting them would report every import as missing bank details.
+        "bank_name": payload.bank_name,
+        "sort_code": payload.sort_code,
+        "account_name": payload.account_name,
+        "account_number": payload.account_number,
+    })
+    return {"warnings": report.warnings, "actions": report.actions, "flags": report.flags}
 
 
 async def handle_import(payload: ImportTenancyInput, *, agent_email: str | None = None) -> dict:
@@ -109,6 +143,8 @@ async def handle_import(payload: ImportTenancyInput, *, agent_email: str | None 
         "Anti_Discrimination_Confirmed": True,
         "Anti_Discrimination_Confirmed_Date": today,
     }
+    if payload.smoke_detectors_fitted is not None:
+        property_fields["smoke_detectors_fitted"] = payload.smoke_detectors_fitted == "Yes"
     optional = {
         "Property Type": payload.property_type,
         "Service Level": payload.service_level,
@@ -123,20 +159,22 @@ async def handle_import(payload: ImportTenancyInput, *, agent_email: str | None 
         "Inventory_Clerk": payload.inventory_clerk,
     }
     property_fields.update({k: v for k, v in optional.items() if v is not None})
-    # Certificate status is implied by holding an expiry date for it.
-    if payload.gas_cert_expiry:
-        property_fields["Gas_Cert_Status"] = "On File"
-    if payload.eicr_expiry:
-        property_fields["EICR_Status"] = "On File"
-    if payload.epc_rating:
-        property_fields["EPC_Status"] = "On File"
+    # Certificate status is implied by holding an expiry date for it. Anything
+    # not evidenced is "Not Provided" rather than blank, so the compliance
+    # report treats a missing certificate as missing instead of unknown.
+    gas_status = "On File" if payload.gas_cert_expiry else "Not Provided"
+    eicr_status = "On File" if payload.eicr_expiry else "Not Provided"
+    epc_status = "On File" if payload.epc_rating else "Not Provided"
+    property_fields["Gas_Cert_Status"] = gas_status
+    property_fields["EICR_Status"] = eicr_status
+    property_fields["EPC_Status"] = epc_status
     if stage_1:
         property_fields["Stage"] = [stage_1["id"]]
 
     property_id = at.create(at.TableNames.PROPERTIES, property_fields)["id"]
 
     # 2. Landlord - already verified offline by definition of an existing let.
-    landlord_id = at.create(at.TableNames.LANDLORDS, {
+    landlord_fields: dict[str, Any] = {
         "Full Name": payload.landlord_full_name,
         "Email Address": payload.landlord_email,
         "Properties": [property_id],
@@ -145,7 +183,28 @@ async def handle_import(payload: ImportTenancyInput, *, agent_email: str | None 
         "TA_Signed": payload.ta_landlord_signed,
         "Primary_For_Disbursement": True,
         "Ownership_Share_Percent": 100,
-    })["id"]
+        # Tax treatment. An overseas landlord without an HMRC approval number
+        # means 20% withholding is active - getting this wrong is an HMRC
+        # liability, and it fails silently, so it is derived here exactly as
+        # the landlord admin form derives it rather than left to a later edit.
+        "UK_Resident_Status": "Non-resident" if is_overseas(payload.residency) else "Resident",
+        "NRL_Withholding_Active": nrl_withholding_active(
+            payload.residency, payload.nrl_approval_number,
+        ),
+        "NRL_Approval_Number": payload.nrl_approval_number,
+        # Correspondence + payout.
+        "Full Address": payload.landlord_full_address,
+        "Post Code": payload.landlord_post_code,
+        "Mobile Number": payload.landlord_mobile,
+        "Bank Name": payload.bank_name,
+        "Sort Code": payload.sort_code,
+        "Account Name": payload.account_name,
+        "Account Number": payload.account_number,
+    }
+    landlord_id = at.create(
+        at.TableNames.LANDLORDS,
+        {k: v for k, v in landlord_fields.items() if v is not None},
+    )["id"]
     at.update(at.TableNames.PROPERTIES, property_id, {"Landlords": [landlord_id]})
 
     # 3. Tenants. Referencing is recorded as done: it happened before this
@@ -195,8 +254,13 @@ async def handle_import(payload: ImportTenancyInput, *, agent_email: str | None 
     if reached >= TARGET_STAGE:
         _apply_live_side_effects(property_id)
 
-    logger.info("import.completed property=%s reached=%s blocked_at=%s tenants=%d",
-                property_id, reached, blocked_at, len(tenant_ids))
+    compliance = _compliance_report(
+        payload, gas_status=gas_status, epc_status=epc_status, eicr_status=eicr_status,
+    )
+
+    logger.info("import.completed property=%s reached=%s blocked_at=%s tenants=%d warnings=%d",
+                property_id, reached, blocked_at, len(tenant_ids),
+                len(compliance["warnings"]))
     return {
         "property_id": property_id,
         "landlord_id": landlord_id,
@@ -205,6 +269,7 @@ async def handle_import(payload: ImportTenancyInput, *, agent_email: str | None 
         "blocked_at": blocked_at,
         "blockers": blockers,
         "is_live": reached >= TARGET_STAGE,
+        "compliance": compliance,
         "documents": IMPORT_DOCUMENT_CHECKLIST,
     }
 
