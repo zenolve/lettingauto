@@ -98,6 +98,118 @@ def _compliance_report(payload: ImportTenancyInput, *, gas_status, epc_status, e
     return {"warnings": report.warnings, "actions": report.actions, "flags": report.flags}
 
 
+class _Created:
+    """Rows an import has written so far, so a failure part-way can undo them.
+
+    The adapter commits every create on its own; nothing spans the property,
+    landlord, tenants and audit row. Without this, a failure on the third
+    tenant leaves a property and a landlord behind, the agent sees a 500,
+    retries, and the second attempt duplicates both.
+    """
+
+    def __init__(self) -> None:
+        self.rows: list[tuple[str, str]] = []
+
+    def add(self, table: str, record: dict) -> str:
+        self.rows.append((table, record["id"]))
+        return record["id"]
+
+    def undo(self) -> None:
+        # Reverse order, best-effort: a row that will not delete is logged
+        # rather than raised, so the caller still sees the original failure.
+        for table, rid in reversed(self.rows):
+            try:
+                at.delete(table, rid)
+            except Exception as e:  # noqa: BLE001
+                logger.warning("import.rollback_failed table=%s id=%s err=%s", table, rid, e)
+
+
+def _create_records(
+    payload: ImportTenancyInput, property_fields: dict[str, Any], today: str, created: _Created,
+) -> tuple[str, str, list[str]]:
+    """Write the property, landlord, tenants and audit row.
+
+    Every id is registered on ``created`` the moment it exists, so a failure
+    on any later write can be rolled back by the caller.
+    """
+    property_id = created.add(
+        at.TableNames.PROPERTIES, at.create(at.TableNames.PROPERTIES, property_fields),
+    )
+
+    # Landlord - already verified offline by definition of an existing let.
+    landlord_fields: dict[str, Any] = {
+        "Full Name": payload.landlord_full_name,
+        "Email Address": payload.landlord_email,
+        "Properties": [property_id],
+        "Verification Status": "Verified",
+        "TC_Signed": payload.tc_signed,
+        "TA_Signed": payload.ta_landlord_signed,
+        "Primary_For_Disbursement": True,
+        "Ownership_Share_Percent": 100,
+        # Tax treatment. An overseas landlord without an HMRC approval number
+        # means 20% withholding is active - getting this wrong is an HMRC
+        # liability, and it fails silently, so it is derived here exactly as
+        # the landlord admin form derives it rather than left to a later edit.
+        "UK_Resident_Status": "Non-resident" if is_overseas(payload.residency) else "Resident",
+        "NRL_Withholding_Active": nrl_withholding_active(
+            payload.residency, payload.nrl_approval_number,
+        ),
+        "NRL_Approval_Number": payload.nrl_approval_number,
+        # Correspondence + payout.
+        "Full Address": payload.landlord_full_address,
+        "Post Code": payload.landlord_post_code,
+        "Mobile Number": payload.landlord_mobile,
+        "Bank Name": payload.bank_name,
+        "Sort Code": payload.sort_code,
+        "Account Name": payload.account_name,
+        "Account Number": payload.account_number,
+    }
+    landlord_id = created.add(at.TableNames.LANDLORDS, at.create(
+        at.TableNames.LANDLORDS,
+        {k: v for k, v in landlord_fields.items() if v is not None},
+    ))
+    at.update(at.TableNames.PROPERTIES, property_id, {"Landlords": [landlord_id]})
+
+    # Tenants. Referencing is recorded as done: it happened before this
+    # tenancy started, elsewhere. Marked "Imported" rather than "Passed" so
+    # the record never claims a reference this system did not obtain.
+    ordered = sorted(payload.tenants, key=lambda t: not t.is_lead)
+    tenant_ids: list[str] = []
+    for t in ordered:
+        tenant_ids.append(created.add(at.TableNames.TENANTS, at.create(at.TableNames.TENANTS, {
+            "Name": t.full_name,
+            "Tenant Email": t.email,
+            "Property Id": [property_id],
+            "Start Date": payload.start_date.isoformat(),
+            "End Date": payload.end_date.isoformat() if payload.end_date else None,
+            "Tenancy Term": _tenancy_term(payload),
+            "Amount": payload.rent_amount,
+            "Rent_Frequency": payload.rent_frequency,
+            "Deposit Amount": payload.deposit_amount,
+            "Referencing_Status": "Imported",
+            "Referencing_Recorded": True,
+            "Landlord_Approval_Received": True,
+            "TA_Signed": payload.ta_tenants_signed,
+            "Guarantor_Name": payload.guarantor_name,
+            "Guarantor_Email": payload.guarantor_email,
+        })))
+
+    # Properties.Tenant is the "accepted" relation (set on offer acceptance in
+    # the normal flow) - an imported tenancy is by definition accepted.
+    at.update(at.TableNames.PROPERTIES, property_id, {"Tenant": tenant_ids})
+
+    # Provenance. No schema change needed: the Submissions row records that
+    # this history was imported rather than originated here, and keeps the
+    # exact payload for audit.
+    created.add(at.TableNames.SUBMISSIONS, at.create(at.TableNames.SUBMISSIONS, {
+        "Form Name": IMPORT_FORM_NAME,
+        "Property": [property_id],
+        "Submitted Date": today,
+        "JSON Data": json.dumps(payload.model_dump(mode="json"), default=str),
+    }))
+    return property_id, landlord_id, tenant_ids
+
+
 async def handle_import(payload: ImportTenancyInput, *, agent_email: str | None = None) -> dict:
     """Create an existing tenancy and walk it up the gates. Returns a report."""
     annual = _annual_rent(payload.rent_amount, payload.rent_frequency)
@@ -171,84 +283,23 @@ async def handle_import(payload: ImportTenancyInput, *, agent_email: str | None 
     if stage_1:
         property_fields["Stage"] = [stage_1["id"]]
 
-    property_id = at.create(at.TableNames.PROPERTIES, property_fields)["id"]
+    # 2. Write the rows - all or nothing. The adapter has no cross-row
+    #    transaction, so a failure part-way is undone here before it surfaces.
+    created = _Created()
+    try:
+        property_id, landlord_id, tenant_ids = _create_records(
+            payload, property_fields, today, created,
+        )
+    except Exception:
+        logger.exception("import.create_failed address=%r rows_written=%d",
+                         payload.address, len(created.rows))
+        created.undo()
+        raise
 
-    # 2. Landlord - already verified offline by definition of an existing let.
-    landlord_fields: dict[str, Any] = {
-        "Full Name": payload.landlord_full_name,
-        "Email Address": payload.landlord_email,
-        "Properties": [property_id],
-        "Verification Status": "Verified",
-        "TC_Signed": payload.tc_signed,
-        "TA_Signed": payload.ta_landlord_signed,
-        "Primary_For_Disbursement": True,
-        "Ownership_Share_Percent": 100,
-        # Tax treatment. An overseas landlord without an HMRC approval number
-        # means 20% withholding is active - getting this wrong is an HMRC
-        # liability, and it fails silently, so it is derived here exactly as
-        # the landlord admin form derives it rather than left to a later edit.
-        "UK_Resident_Status": "Non-resident" if is_overseas(payload.residency) else "Resident",
-        "NRL_Withholding_Active": nrl_withholding_active(
-            payload.residency, payload.nrl_approval_number,
-        ),
-        "NRL_Approval_Number": payload.nrl_approval_number,
-        # Correspondence + payout.
-        "Full Address": payload.landlord_full_address,
-        "Post Code": payload.landlord_post_code,
-        "Mobile Number": payload.landlord_mobile,
-        "Bank Name": payload.bank_name,
-        "Sort Code": payload.sort_code,
-        "Account Name": payload.account_name,
-        "Account Number": payload.account_number,
-    }
-    landlord_id = at.create(
-        at.TableNames.LANDLORDS,
-        {k: v for k, v in landlord_fields.items() if v is not None},
-    )["id"]
-    at.update(at.TableNames.PROPERTIES, property_id, {"Landlords": [landlord_id]})
-
-    # 3. Tenants. Referencing is recorded as done: it happened before this
-    #    tenancy started, elsewhere. Marked "Imported" rather than "Passed" so
-    #    the record never claims a reference this system did not obtain.
-    ordered = sorted(payload.tenants, key=lambda t: not t.is_lead)
-    tenant_ids: list[str] = []
-    for t in ordered:
-        tenant_ids.append(at.create(at.TableNames.TENANTS, {
-            "Name": t.full_name,
-            "Tenant Email": t.email,
-            "Property Id": [property_id],
-            "Start Date": payload.start_date.isoformat(),
-            "End Date": payload.end_date.isoformat() if payload.end_date else None,
-            "Tenancy Term": _tenancy_term(payload),
-            "Amount": payload.rent_amount,
-            "Rent_Frequency": payload.rent_frequency,
-            "Deposit Amount": payload.deposit_amount,
-            "Referencing_Status": "Imported",
-            "Referencing_Recorded": True,
-            "Landlord_Approval_Received": True,
-            "TA_Signed": payload.ta_tenants_signed,
-            "Guarantor_Name": payload.guarantor_name,
-            "Guarantor_Email": payload.guarantor_email,
-        })["id"])
-
-    # Properties.Tenant is the "accepted" relation (set on offer acceptance in
-    # the normal flow) - an imported tenancy is by definition accepted.
-    at.update(at.TableNames.PROPERTIES, property_id, {"Tenant": tenant_ids})
-
-    # 4. Provenance. No schema change needed: the Submissions row records that
-    #    this history was imported rather than originated here, and keeps the
-    #    exact payload for audit.
-    at.create(at.TableNames.SUBMISSIONS, {
-        "Form Name": IMPORT_FORM_NAME,
-        "Property": [property_id],
-        "Submitted Date": today,
-        "JSON Data": json.dumps(payload.model_dump(mode="json"), default=str),
-    })
-
-    # 5. Walk the gates. Silent: no per-stage emails for historic events.
+    # 3. Walk the gates. Silent: no per-stage emails for historic events.
     reached, blocked_at, blockers = await walk_gates(property_id, TARGET_STAGE)
 
-    # 6. Post-signing side-effects the pipeline would have produced. Only once
+    # 4. Post-signing side-effects the pipeline would have produced. Only once
     #    the tenancy is genuinely live, and only the forward-looking ones
     #    (renewal diary, financials) - never the correspondence.
     if reached >= TARGET_STAGE:
@@ -283,9 +334,20 @@ async def walk_gates(property_id: str, target: int) -> tuple[int, int | None, li
     """
     reached = 1
     for stage in range(2, target + 1):
-        result = await evaluate_gate(
-            property_id, stage, source="Imported existing tenancy", silent=True,
-        )
+        try:
+            result = await evaluate_gate(
+                property_id, stage, source="Imported existing tenancy", silent=True,
+            )
+        except Exception as e:  # noqa: BLE001
+            # The rows exist and are consistent by now. Raising would hand the
+            # agent a 500 and invite a retry that duplicates them; report the
+            # failure as the blocker instead - "Re-evaluate gate" on the
+            # property picks up from here.
+            logger.exception("import.gate_walk_failed property=%s stage=%s", property_id, stage)
+            return reached, stage, [
+                f"The Stage {stage} check could not run ({type(e).__name__}). The tenancy "
+                "was imported - use 'Re-evaluate gate' on the property to continue."
+            ]
         if not result.advanced:
             return reached, stage, list(result.failures)
         reached = stage

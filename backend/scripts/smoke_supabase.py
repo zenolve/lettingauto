@@ -1,7 +1,7 @@
 """End-to-end smoke test of the Supabase data layer against a REAL database.
 
 Drives the actual handlers (PG_01 take-on → gate → PG_03 offer → accept →
-referencing → scheduler → payments → cascade delete) through the supabase
+referencing → scheduler → payments → PG_IM import → cascade delete) through the supabase
 client, asserting the link symmetry, lookups and Airtable-shape conventions
 the app depends on. Run it whenever the schema or the adapter changes:
 
@@ -41,12 +41,33 @@ def check(label: str, ok: bool, detail: str = "") -> None:
         sys.exit(1)
 
 
+def delete_property_tree(property_id: str, landlord_id: str) -> None:
+    """Delete a property with everything hanging off it, then its landlord.
+
+    Mirrors routers/properties.delete_property for rows this run created,
+    where the landlord is known to have no other property.
+    """
+    pf = at.get(at.TableNames.PROPERTIES, property_id, fresh=True)["fields"]
+    for tbl, key in [
+        (at.TableNames.TENANTS, "Tenant"),
+        (at.TableNames.DIARY, "Diary"),
+        (at.TableNames.FINANCIALS, "Financials"),
+        (at.TableNames.GATE_LOG, "Gate_Log"),
+        (at.TableNames.SUBMISSIONS, "Submissions"),
+    ]:
+        for rid in pf.get(key) or []:
+            at.delete(tbl, rid)
+    at.delete(at.TableNames.LANDLORDS, landlord_id)
+    at.delete(at.TableNames.PROPERTIES, property_id)
+
+
 async def main() -> None:
     from app.handlers.pg00_gate import evaluate_gate
     from app.handlers.pg01_takeon import handle_takeon
     from app.handlers.pg03_offer import handle_offer
     from app.handlers.pg06_scheduler import run_scheduler
-    from app.models.common import OfferInput, PropertyTakeonInput
+    from app.handlers.pg_import import handle_import, was_imported
+    from app.models.common import ImportTenancyInput, OfferInput, PropertyTakeonInput
     from app.services.offers import accept_offer, offers_for_property
     from app.services.sent_documents import record_sent, update_status_by_envelope
 
@@ -193,6 +214,61 @@ async def main() -> None:
     check("payment row created", bool(pay["id"]))
     rows = at.search(at.TableNames.PAYMENTS, at.eq("property_id", pid), fresh=True)
     check("payment searchable by property", len(rows) == 1 and rows[0]["fields"]["amount"] == 461)
+
+    # ------------------------------------------------------------- PG_IM import
+    # An existing tenancy declared complete walks every gate to Live; the same
+    # tenancy with one declaration missing stops at that gate. Both run as
+    # agency A and must come out stamped and linked like a native take-on.
+    far = (date.today() + timedelta(days=200)).isoformat()
+    declared = dict(
+        address="2 Smoke Import Row, London", post_code="W8 5LS",
+        landlord_full_name="Smoke Importer", landlord_email="smoke-importer@example.com",
+        landlord_full_address="2 Smoke Import Row", landlord_post_code="W8 5LS",
+        residency="UK Resident",
+        bank_name="Smoke Bank", sort_code="11-22-33",
+        account_name="Smoke Importer", account_number="12345678",
+        smoke_detectors_fitted="Yes", furniture_fire_regs="Yes",
+        tenants=[{"full_name": "Smoke Sitting Tenant", "email": "smoke-sitting@example.com",
+                  "is_lead": True}],
+        rent_amount=1500, rent_frequency="Monthly", start_date="2025-01-01",
+        deposit_amount=1700, gas_cert_expiry=far, eicr_expiry=far, epc_rating="C",
+        deposit_registered=True, tds_cert_on_file=True,
+        tc_signed=True, ta_landlord_signed=True, ta_tenants_signed=True,
+        how_to_rent_served=True, gas_cert_served=True, epc_served=True, eicr_served=True,
+        tds_info_served=True, rra_sheet_served=True,
+    )
+    live = await handle_import(ImportTenancyInput(**declared), agent_email="a@smoke.example.com")
+    lpf = at.get(at.TableNames.PROPERTIES, live["property_id"], fresh=True)["fields"]
+    check("import: complete evidence reaches Live",
+          live["is_live"] and live["stage_reached"] == 8, "; ".join(live["blockers"]))
+    check("import: Stage_Order lookup == 8", lpf.get("Stage_Order") == 8, str(lpf.get("Stage_Order")))
+    check("import: agency stamped", lpf.get("agency_id") == agency_a["id"], str(lpf.get("agency_id")))
+    check("import: landlord + tenant linked both ways",
+          lpf.get("Landlords") == [live["landlord_id"]]
+          and lpf.get("Tenant") == live["tenant_ids"]
+          and at.get(at.TableNames.LANDLORDS, live["landlord_id"], fresh=True)["fields"]
+          .get("Properties") == [live["property_id"]])
+    check("import: provenance row readable", was_imported(live["property_id"]))
+    check("import: financials + 4 diary entries once Live",
+          len(lpf.get("Financials") or []) == 1 and len(lpf.get("Diary") or []) == 4,
+          f"fin={lpf.get('Financials')} diary={lpf.get('Diary')}")
+
+    gap = await handle_import(ImportTenancyInput(**{
+        **declared, "address": "3 Smoke Import Row, London", "ta_tenants_signed": False,
+    }), agent_email="a@smoke.example.com")
+    gpf = at.get(at.TableNames.PROPERTIES, gap["property_id"], fresh=True)["fields"]
+    check("import: missing tenant signature stops at gate 7",
+          (gap["stage_reached"], gap["blocked_at"]) == (6, 7),
+          f"{gap['blocked_at']} {gap['blockers']}")
+    check("import: no financials before Live", not gpf.get("Financials"), str(gpf.get("Financials")))
+
+    for imported in (live, gap):
+        delete_property_tree(imported["property_id"], imported["landlord_id"])
+    try:
+        at.get(at.TableNames.PROPERTIES, live["property_id"], fresh=True)
+        check("import: rows removed", False)
+    except Exception:
+        check("import: rows removed", True)
 
     # ------------------------------------------------------- cascade delete
     # Mirrors routers/properties.delete_property: delete children, then the

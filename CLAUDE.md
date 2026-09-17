@@ -16,10 +16,10 @@ commercial changes to them.
 ## Commands
 
 ```bash
-# Backend tests (62 unit tests; APP_ENV=test disables cache + uses mock signer)
+# Backend tests (96 unit tests; APP_ENV=test disables cache + uses mock signer)
 cd backend && APP_ENV=test python -m pytest tests -q
 
-# End-to-end smoke vs a real DB (37 checks incl. multi-tenant isolation).
+# End-to-end smoke vs a real DB (46 checks incl. multi-tenant isolation + import).
 # Creates and deletes its own data — safe on the live project.
 cd backend && python -m scripts.smoke_supabase
 
@@ -146,7 +146,7 @@ backend/app/
   templates/                # emails/ (Jinja), contracts/ (_shell.html), library/ (42 tpls + master TA/T&C)
 backend/scripts/
   apply_migrations.py       # run supabase/migrations/*.sql against SUPABASE_DB_URL + verify
-  smoke_supabase.py         # 37-check e2e incl. multi-tenant isolation (safe on live DB)
+  smoke_supabase.py         # 46-check e2e incl. multi-tenant isolation + import (safe on live DB)
 frontend/src/
   lib/                      # api.ts (axios+auth), auth.ts (supabase session), agency.ts (me store), supabase.ts, stages.ts
   components/               # AgencyGate, OnboardingModal, RequireAuth, layout/{Agent,Public}Layout, ui/* (incl. EntityEditDrawer)
