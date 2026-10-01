@@ -112,9 +112,13 @@ def get_audience(doc_id: str) -> list[str]:
     import json  # noqa: PLC0415 — module keeps json as a local import
     try:
         data = json.loads(_audience_path().read_text(encoding="utf-8"))
-        return [r for r in (data.get(doc_id) or []) if r in VALID_AUDIENCE_ROLES]
-    except Exception:  # noqa: BLE001 — missing/corrupt file → no audience
-        return []
+    except Exception:  # noqa: BLE001 — missing/corrupt file → fall back to defaults
+        data = {}
+    if isinstance(data, dict) and doc_id in data:
+        # An explicit setting wins, including an explicit "nobody" ([]).
+        return [r for r in (data[doc_id] or []) if r in VALID_AUDIENCE_ROLES]
+    doc = get_document(doc_id)
+    return list(doc.audience) if doc else []
 
 
 def set_audience(doc_id: str, roles: list[str]) -> list[str]:

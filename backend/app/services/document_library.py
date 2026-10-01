@@ -50,6 +50,11 @@ class LibraryDoc:
     # global defaults ['/sig1/', '/sig2/']" — fine for docs that bake those
     # markers into the source. Override per-doc when the markers differ.
     anchor_strings: Optional[list[str]] = None
+    # Default "Sends to" roles. The agent can override per document from the
+    # library editor (persisted in uploads/_config/doc_audience.json); this is
+    # what applies until they do, so a tenant letter addresses the tenant
+    # from the first send.
+    audience: list[str] = field(default_factory=list)
 
 
 def _load_body(filename: str) -> str:
@@ -82,7 +87,7 @@ def _placeholder_body(name: str, tpl_id: str) -> str:
 #   2 Compliance     — TPL-03 KYC + TPL-07 Legal Reqs + TPL-08 Pre-Tenancy Works
 #                      + PG T&C 2026 (user-supplied)
 #   3 Marketing      — (no TPL — handled by photo/portal UI)
-#   4 Offer          — TPL-05 Offer Confirmation, TPL-06 Referencing Request
+#   4 Offer          — TPL-05 Offer Confirmation (LL), TPL-43 Acceptance (TT), TPL-06 Referencing Request
 #   5 Referencing    — TPL-06 (re-served reminder)
 #   6 TA Signing     — APT Pet ABNB (user-supplied APT TA), Common-Law TA (user-supplied)
 #   7 Pre Move-in    — TPL-09 Bank/SO, TPL-10 Check-In, TPL-11 Welcome Pack,
@@ -97,7 +102,10 @@ def _add(*args, **kwargs) -> None:
     _CATALOG.append(LibraryDoc(*args, **kwargs))
 
 
-def _tpl(tpl_id: str, name: str, stage: int, mode: DocMode = "email_html", signers: list[str] | None = None) -> None:
+def _tpl(
+    tpl_id: str, name: str, stage: int, mode: DocMode = "email_html",
+    signers: list[str] | None = None, audience: list[str] | None = None,
+) -> None:
     """Register a TPL.
 
     If a matching file exists under ``templates/library/<id>.html`` (extracted
@@ -118,6 +126,7 @@ def _tpl(tpl_id: str, name: str, stage: int, mode: DocMode = "email_html", signe
         body_file=body_filename if body_exists else None,
         placeholder_body=None if body_exists else _placeholder_body(name, tpl_id),
         signers=signers or [],
+        audience=audience or [],
         description="Master correspondence library.",
     )
 
@@ -181,6 +190,9 @@ _tpl("TPL-08", "Pre-Tenancy Works Sign-Off Request", 2, "email_pdf")
 
 # Stage 4 — Offer
 _tpl("TPL-05", "Offer Confirmation to Landlord",  4, "email_pdf")
+# Tenant-side counterpart of TPL-05 (not in the master doc; converted from the
+# agency's "Confirmation Acceptance Offer Letter to TT" Word original).
+_tpl("TPL-43", "Offer Acceptance Confirmation to Tenant", 4, "email_pdf", audience=["Tenant"])
 _tpl("TPL-06", "Referencing Request to Tenant",   4, "email_html")
 
 # Stage 7 — Pre Move-in

@@ -143,7 +143,7 @@ backend/app/
     offers.py               # offer lifecycle (accept/supersede/close)
     merge_fields.py         # {{merge_field}} context from records (incl. agency_*)
     document_library.py / prescribed_docs.py / sent_documents.py / compliance.py / derivations.py
-  templates/                # emails/ (Jinja), contracts/ (_shell.html), library/ (42 tpls + master TA/T&C)
+  templates/                # emails/ (Jinja), contracts/ (_shell.html), library/ (43 tpls + master TA/T&C)
 backend/scripts/
   apply_migrations.py       # run supabase/migrations/*.sql against SUPABASE_DB_URL + verify
   smoke_supabase.py         # 46-check e2e incl. multi-tenant isolation + import (safe on live DB)
