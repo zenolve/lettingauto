@@ -66,11 +66,18 @@ export function OffersPanel({ propertyId, onChanged }: { propertyId: string; onC
 
   async function act(offer: Offer, action: "accept" | "reject" | "withdraw") {
     if (action !== "accept") {
+      // The accepted offer carries the tenancy being set up: closing it unwinds
+      // that tenancy on the backend (tenancies.unwind_accepted_offer).
+      const accepted = offer.status === "Accepted";
+      const what = action === "reject" ? "Records the landlord declining this offer." : "Records the tenant pulling out.";
       const ok = await confirm({
         title: action === "reject" ? "Mark offer as rejected by landlord?" : "Withdraw this offer?",
-        body: action === "reject"
-          ? "Records the landlord declining this offer. If it was the accepted offer, the tenant link is rolled back."
-          : "Records the tenant pulling out. The DocuSign envelope is voided and, if this was the accepted offer, the tenant link is rolled back.",
+        body: accepted
+          ? `${what} This is the accepted offer, so the property goes back to the Offer stage: the tenant ` +
+            "link is removed and this tenancy's agreement signatures, deposit, served-document and move-in " +
+            "records are cleared. A tenancy agreement still out for signature is voided, and DocuSign " +
+            "tells its recipients."
+          : `${what}${action === "withdraw" ? " Its offer-letter envelope is voided." : ""}`,
         confirmLabel: action === "reject" ? "Mark rejected" : "Withdraw offer",
         tone: "warning",
       });
@@ -83,7 +90,11 @@ export function OffersPanel({ propertyId, onChanged }: { propertyId: string; onC
 
     setBusy(offer.id); setErr(null);
     try {
-      await api.post(`/api/offers/${offer.id}/${action}`, reason ? { reason } : {});
+      const { data } = await api.post(`/api/offers/${offer.id}/${action}`, reason ? { reason } : {});
+      const voidErrors: string[] = data?.unwound?.void_errors ?? [];
+      if (voidErrors.length > 0) {
+        setErr(`Done, but this agreement couldn't be voided - void it in DocuSign so it can't be signed: ${voidErrors.join("; ")}`);
+      }
       load();
       onChanged?.();
     } catch (e: any) {

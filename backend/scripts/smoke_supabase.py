@@ -69,7 +69,7 @@ async def main() -> None:
     from app.handlers.pg_import import handle_import, was_imported
     from app.services import tenancies as tn
     from app.models.common import ImportTenancyInput, OfferInput, PropertyTakeonInput
-    from app.services.offers import accept_offer, offers_for_property
+    from app.services.offers import accept_offer, close_offer, offers_for_property
     from app.services.sent_documents import (
         current_version, get_body, record_sent, update_status_by_envelope,
     )
@@ -209,6 +209,17 @@ async def main() -> None:
     check("sent copy stored + found by uuid", get_body(v2_id) == "<p>Smoke letter, revised</p>")
     check("current version is the revision",
           (current_version(pid, "tpl_01") or {}).get("submission_id") == v2_id)
+
+    # An accepted offer falls through after the landlord signed the agreement:
+    # the property goes back to Offer with no signature left for the next
+    # tenant. void_envelope=False - the smoke offer's envelope id is a mock.
+    at.update(at.TableNames.PROPERTIES, pid, {"TA_LL_Signed": True, "How_To_Rent_Served": True})
+    fell = await close_offer(oid, status="Withdrawn_By_Tenant", reason="smoke", void_envelope=False)
+    wpf = at.get(at.TableNames.PROPERTIES, pid, fresh=True)["fields"]
+    check("withdrawal: signature + served record cleared, back to Offer",
+          fell["rolled_back_property"] and not wpf.get("TA_LL_Signed") and not wpf.get("How_To_Rent_Served")
+          and not wpf.get("Tenant") and wpf.get("Stage_Order") == 4,
+          f"stage={wpf.get('Stage_Order')} cleared={(fell.get('unwound') or {}).get('cleared')}")
 
     # ------------------------------------------------------------- PG_06 diary
     at.create(at.TableNames.DIARY, {

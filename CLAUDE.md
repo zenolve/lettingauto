@@ -16,10 +16,10 @@ commercial changes to them.
 ## Commands
 
 ```bash
-# Backend tests (133 unit tests; APP_ENV=test disables cache + uses mock signer)
+# Backend tests (142 unit tests; APP_ENV=test disables cache + uses mock signer)
 cd backend && APP_ENV=test python -m pytest tests -q
 
-# End-to-end smoke vs a real DB (60 checks incl. multi-tenant isolation, import, versioning, re-let).
+# End-to-end smoke vs a real DB (61 checks incl. multi-tenant isolation, import, versioning, re-let).
 # Creates and deletes its own data — safe on the live project.
 cd backend && python -m scripts.smoke_supabase
 
@@ -98,7 +98,11 @@ start; fulfilled = `metadata.relet.tenancy_id`). Tenancy-related records
 created before the cycle start (stage ≥ 4 sends, offers, the merge-field
 tenant) belong to an archived tenancy — use
 `tenancies.belongs_to_previous_tenancy`. Offers and acceptances are refused
-from stage 7 (`ensure_no_tenancy_in_progress`).
+from stage 7 (`ensure_no_tenancy_in_progress`). Withdrawing or rejecting the
+ACCEPTED offer before it goes live unwinds that tenancy the same way
+(`tenancies.unwind_accepted_offer`: signatures, deposit, served and move-in
+records cleared, agreements still out for signature voided); once live it is
+refused — end the tenancy instead.
 
 ### Branding is per-agency at runtime
 `app/core/branding.get_brand()` resolves the CURRENT agency's name/colours
@@ -169,7 +173,7 @@ backend/app/
   templates/                # emails/ (Jinja), contracts/ (_shell.html), library/ (43 tpls + master TA/T&C)
 backend/scripts/
   apply_migrations.py       # run supabase/migrations/*.sql against SUPABASE_DB_URL + verify
-  smoke_supabase.py         # 60-check e2e incl. multi-tenant isolation, import, versioning, re-let (safe on live DB)
+  smoke_supabase.py         # 61-check e2e incl. multi-tenant isolation, import, versioning, re-let (safe on live DB)
 frontend/src/
   lib/                      # api.ts (axios+auth), auth.ts (supabase session), agency.ts (me store), supabase.ts, stages.ts
   components/               # AgencyGate, OnboardingModal, RequireAuth, layout/{Agent,Public}Layout, ui/* (incl. EntityEditDrawer)

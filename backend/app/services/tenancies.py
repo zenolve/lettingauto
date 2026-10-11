@@ -381,6 +381,95 @@ async def start_relet(property_id: str, *, by: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# An accepted offer that falls through before move-in
+# ---------------------------------------------------------------------------
+# A fall-through leaves these alone: the anti-discrimination confirmation covers
+# the marketing round, which carries on, and pre-tenancy works are about the
+# property, not the tenant who withdrew. Everything else in TENANCY_FIELDS was
+# done for that tenant and is not the next tenant's.
+KEPT_WHEN_OFFER_FALLS_THROUGH = frozenset({
+    "Anti_Discrimination_Confirmed", "Anti_Discrimination_Confirmed_Date", "Works_Signed_Off",
+})
+
+# The tenancy agreement is signed at this stage; a sent document here with an
+# open envelope is an agreement that could still be signed.
+AGREEMENT_STAGE = 6
+
+
+def ensure_offer_can_fall_through(fields: dict) -> None:
+    """A live or ended tenancy is closed by "End tenancy", never by
+    withdrawing or rejecting the offer it started from."""
+    stage = derive_stage(fields)
+    if stage >= 8:
+        raise TenancyStateError(
+            "This offer became the live tenancy - end the tenancy (and re-let the property) "
+            "instead of withdrawing or rejecting the offer."
+        )
+
+
+async def _void_open_agreements(property_id: str, reason: str) -> tuple[list[str], list[str]]:
+    """Void tenancy agreements still out for signature in the current tenancy.
+
+    Left open, a signature arriving later would set the property's TA flags
+    again - for a tenancy that no longer exists. Returns (voided doc names,
+    errors); a refusal is reported, never raised.
+    """
+    from app.core.signing import void_submission  # noqa: PLC0415 — avoid load cycle
+    from app.handlers.pg04_docuseal import _doc_kind  # noqa: PLC0415 — the webhook's own "is it a TA?"
+    from app.services import sent_documents as sd  # noqa: PLC0415
+
+    voided: list[str] = []
+    errors: list[str] = []
+    for row in sd.list_for_property(property_id):
+        if (row.get("stage") != AGREEMENT_STAGE or row.get("previous_tenancy")
+                or not row.get("envelope_open")
+                or _doc_kind(row.get("doc_name") or "", row.get("doc_id")) != "TA"):
+            continue
+        envelope = sd.get_sent(row["submission_id"]).get("fields", {}).get("Envelope ID")
+        try:
+            await void_submission(envelope, reason)
+            sd.mark_voided(row["submission_id"])
+            voided.append(row.get("doc_name") or row["submission_id"])
+        except Exception as e:  # noqa: BLE001
+            logger.warning("tenancies.agreement_void_failed property=%s env=%s err=%s", property_id, envelope, e)
+            errors.append(f"{row.get('doc_name') or 'Tenancy agreement'}: {e}")
+    return voided, errors
+
+
+async def unwind_accepted_offer(property_id: str, fields: dict, *, void_envelopes: bool, reason: str) -> dict:
+    """Undo an accepted offer that fell through before move-in.
+
+    The property returns to the offer stage with nothing of the departed
+    tenant's tenancy left behind - above all no signature that the next tenant
+    would otherwise inherit. ``fields`` is the property as it stood before.
+    """
+    reset = {k: v for k, v in TENANCY_FIELDS.items() if k not in KEPT_WHEN_OFFER_FALLS_THROUGH}
+    cleared = sorted(k for k in reset if fields.get(k) not in (None, False, ""))
+    at.update(at.TableNames.PROPERTIES, property_id, {
+        **reset,
+        "Tenant": [],
+        "Tenancy Checklist": [],
+        "Gate Status": "Clear",
+        "Gate Block Reason": "",
+        "Stage changed at": _today(),
+    })
+    stage = derive_stage(_fields(property_id))
+    link = _stage_link(stage)
+    if link:
+        at.update(at.TableNames.PROPERTIES, property_id, link)
+    cancelled = _cancel_tenancy_diary(fields)
+    voided, void_errors = (await _void_open_agreements(property_id, reason)) if void_envelopes else ([], [])
+    _audit(property_id, "PG_RL Offer fell through", {
+        "cleared": cleared, "stage": stage, "voided": voided, "void_errors": void_errors,
+        "diary_cancelled": cancelled, "reason": reason,
+    })
+    logger.info("tenancies.offer_unwound property=%s stage=%s cleared=%s voided=%d",
+                property_id, stage, cleared, len(voided))
+    return {"cleared": cleared, "stage": stage, "diary_cancelled": cancelled,
+            "voided": voided, "void_errors": void_errors}
+
+
+# ---------------------------------------------------------------------------
 # History
 # ---------------------------------------------------------------------------
 def history(property_id: str) -> list[dict]:

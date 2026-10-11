@@ -219,9 +219,18 @@ async def close_offer(
     void_envelope: bool = True,
     source: str = "manual",
 ) -> dict[str, Any]:
-    """Move an offer to a terminal status. If it was the *accepted* offer,
-    roll back Properties.Tenant + LL_Offer_Accepted so the property returns to
-    the offer stage. Best-effort voids the DocuSign envelope."""
+    """Move an offer to a terminal status. Best-effort voids the offer
+    letter's DocuSign envelope.
+
+    If it was the *accepted* offer and its tenancy hasn't gone live, the
+    property returns to the offer stage with that tenancy unwound
+    (``tenancies.unwind_accepted_offer``): tenant link, tenancy-agreement
+    signatures, deposit and served records cleared, and agreements still out
+    for signature voided - so the next tenant inherits none of it. A live or
+    ended tenancy is refused: that is "End tenancy", not a withdrawal.
+    """
+    from app.services import tenancies  # noqa: PLC0415 — avoid load cycle
+
     if status not in CLOSED_STATUSES:
         raise ValueError(f"close_offer: {status!r} is not a terminal status")
 
@@ -230,6 +239,13 @@ async def close_offer(
     prop_ids = of.get("Property") or []
     property_id = prop_ids[0] if prop_ids else None
     was_accepted = of.get("Status") == "Accepted"
+
+    prop = at.get(at.TableNames.PROPERTIES, property_id).get("fields", {}) if property_id else {}
+    cur = set(prop.get("Tenant") or [])
+    # Only unwind if the property's current tenant link is this offer's.
+    holds_tenancy = was_accepted and bool(cur) and cur == set(of.get("Tenants") or [])
+    if holds_tenancy:
+        tenancies.ensure_offer_can_fall_through(prop)   # before anything changes
 
     update: dict[str, Any] = {"Status": status, "Closed At": date.today().isoformat()}
     if reason:
@@ -244,20 +260,12 @@ async def close_offer(
         except Exception as e:  # noqa: BLE001 — completed/declined envelopes can't be voided
             logger.warning("offers.void_envelope_failed id=%s err=%s", env_id, e)
 
-    rolled_back = False
-    if property_id and was_accepted:
-        prop = at.get(at.TableNames.PROPERTIES, property_id).get("fields", {})
-        cur = set(prop.get("Tenant") or [])
-        mine = set(of.get("Tenants") or [])
-        # Only roll back if the property's current tenant link is this offer's.
-        if cur and cur == mine:
-            at.update(at.TableNames.PROPERTIES, property_id, {
-                "Tenant": [],
-                "LL_Offer_Accepted": False,
-                "Gate Status": "Clear",
-                "Gate Block Reason": "",
-            })
-            rolled_back = True
+    unwound = None
+    if holds_tenancy:
+        unwound = await tenancies.unwind_accepted_offer(
+            property_id, prop, void_envelopes=void_envelope, reason=reason or f"Offer {status}",
+        )
+    rolled_back = unwound is not None
 
     if status == "Rejected_By_Landlord":
         await email_lead_tenant(
@@ -273,4 +281,5 @@ async def close_offer(
         "property_id": property_id,
         "status": status,
         "rolled_back_property": rolled_back,
+        **({"unwound": unwound} if unwound else {}),
     }

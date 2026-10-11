@@ -94,17 +94,21 @@ class CloseBody(BaseModel):
 async def reject(offer_id: str, body: CloseBody | None = None,
                  _: Agent = Depends(require_agent)) -> dict[str, Any]:
     _load_offer_or_404(offer_id)
-    return await offers_svc.close_offer(
-        offer_id, status="Rejected_By_Landlord",
-        reason=(body.reason if body else None), source="agent",
-    )
+    return await _close(offer_id, "Rejected_By_Landlord", body)
 
 
 @router.post("/api/offers/{offer_id}/withdraw")
 async def withdraw(offer_id: str, body: CloseBody | None = None,
                    _: Agent = Depends(require_agent)) -> dict[str, Any]:
     _load_offer_or_404(offer_id)
-    return await offers_svc.close_offer(
-        offer_id, status="Withdrawn_By_Tenant",
-        reason=(body.reason if body else None), source="agent",
-    )
+    return await _close(offer_id, "Withdrawn_By_Tenant", body)
+
+
+async def _close(offer_id: str, status_: str, body: CloseBody | None) -> dict[str, Any]:
+    from app.services.tenancies import TenancyStateError  # noqa: PLC0415
+    try:
+        return await offers_svc.close_offer(
+            offer_id, status=status_, reason=(body.reason if body else None), source="agent",
+        )
+    except TenancyStateError as e:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(e))
