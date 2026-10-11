@@ -16,10 +16,10 @@ commercial changes to them.
 ## Commands
 
 ```bash
-# Backend tests (96 unit tests; APP_ENV=test disables cache + uses mock signer)
+# Backend tests (115 unit tests; APP_ENV=test disables cache + uses mock signer)
 cd backend && APP_ENV=test python -m pytest tests -q
 
-# End-to-end smoke vs a real DB (46 checks incl. multi-tenant isolation + import).
+# End-to-end smoke vs a real DB (51 checks incl. multi-tenant isolation, import, versioning).
 # Creates and deletes its own data — safe on the live project.
 cd backend && python -m scripts.smoke_supabase
 
@@ -30,8 +30,11 @@ cd frontend && npx tsc --noEmit && npx vite build
 docker compose -f docker-compose.dev.yml up -d db   # localhost:54322
 # reset schema: docker compose -f docker-compose.dev.yml down -v
 
-# Apply migrations to whatever SUPABASE_DB_URL points at (incl. live Supabase)
+# Apply migrations to whatever SUPABASE_DB_URL points at. A fresh database takes
+# them all; an already-migrated one (the live project) takes ONLY the new file —
+# replaying 001 fails on the first existing table.
 cd backend && python -m scripts.apply_migrations
+cd backend && python -m scripts.apply_migrations --only 004_sent_document_versions.sql
 ```
 
 Backend runs with `uvicorn app.main:app --port 8000`. Frontend `npm run dev`
@@ -146,7 +149,7 @@ backend/app/
   templates/                # emails/ (Jinja), contracts/ (_shell.html), library/ (43 tpls + master TA/T&C)
 backend/scripts/
   apply_migrations.py       # run supabase/migrations/*.sql against SUPABASE_DB_URL + verify
-  smoke_supabase.py         # 46-check e2e incl. multi-tenant isolation + import (safe on live DB)
+  smoke_supabase.py         # 51-check e2e incl. multi-tenant isolation, import, versioning (safe on live DB)
 frontend/src/
   lib/                      # api.ts (axios+auth), auth.ts (supabase session), agency.ts (me store), supabase.ts, stages.ts
   components/               # AgencyGate, OnboardingModal, RequireAuth, layout/{Agent,Public}Layout, ui/* (incl. EntityEditDrawer)
@@ -154,7 +157,7 @@ frontend/src/
                             # TakeonComplete (payment poller), forms/* (takeon/offer/landlord forms), Library*, Signatures
   styles.css + ../tailwind.config.js   # the Editorial Mesh design system (tokens + primitives)
 frontend/design-previews/   # landing drafts A–F (F chosen)
-supabase/migrations/        # 001 schema+seed, 002 agencies/RLS (both applied to live project)
+supabase/migrations/        # 001 schema+seed, 002 agencies/RLS, 003 form routing, 004 sent-doc versions (all applied to live)
 docs/                       # BUSINESS_MODEL.md, COMMERCIAL_SETUP.md, SUPABASE_MIGRATION.md
 ```
 
@@ -166,5 +169,8 @@ docs/                       # BUSINESS_MODEL.md, COMMERCIAL_SETUP.md, SUPABASE_M
 - `docs/COMMERCIAL_SETUP.md` — everything the operator configures (Supabase,
   OAuth providers, Stripe, env vars, first-run walkthrough).
 - `docs/SUPABASE_MIGRATION.md` — how/why the Airtable→Supabase adapter works.
-- `supabase/migrations/` — 001 schema+seed, 002 agencies/RLS. Append-only;
-  new DDL = new file (001/002 are already applied to the live project).
+- `supabase/migrations/` — 001 schema+seed, 002 agencies/RLS, 003 form
+  routing, 004 sent-document versions. Append-only; new DDL = new idempotent
+  file (all four are applied to the live project).
+- `docs/BACKLOG.md` — deferred work with enough context to pick up cold
+  (signed-PDF capture, template history, re-letting).

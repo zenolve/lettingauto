@@ -368,10 +368,16 @@ async def replace_uploaded_file(
     bucket: str,
     file: UploadFile = File(...),
     delete_filename: str | None = Query(None, description="Optional: filename of the old file to remove after the upload succeeds"),
+    expiry: str | None = Form(None, description="Expiry date (YYYY-MM-DD) for certificate buckets"),
     _: Agent = Depends(require_agent),
 ) -> dict:
     """Upload a new file to a bucket, optionally remove a named old file,
-    then sync the new URL into the matching Airtable URL column."""
+    then sync the new URL into the matching Airtable URL column.
+
+    For certificate buckets the expiry date is applied exactly as on the plain
+    upload routes: recorded on the property, and - when the tenant already
+    holds the superseded copy - the 28-day re-serve prompt is raised.
+    """
     _check_property_id(property_id)
     _check_bucket(bucket)
 
@@ -415,6 +421,7 @@ async def replace_uploaded_file(
         "filename": original,
         "size": len(contents),
         "synced": synced,
+        **_apply_cert_expiry(property_id, bucket, expiry),
     }
 
 
@@ -433,6 +440,9 @@ def list_known_buckets(
                 "name": name,
                 "syncs_to_airtable": name in BUCKET_FIELD_MAP,
                 "airtable_target": BUCKET_FIELD_MAP.get(name),
+                # Certificate buckets: the property field the file's expiry
+                # date belongs in. The uploads page asks for the date first.
+                "expiry_field": BUCKET_EXPIRY_FIELD.get(name),
             }
             for name in sorted(ALLOWED_BUCKETS)
         ],

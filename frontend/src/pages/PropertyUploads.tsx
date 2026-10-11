@@ -13,6 +13,8 @@ type Stored = {
 
 type BucketMeta = {
   name: string;
+  /** Certificate buckets: the property field this file's expiry date goes in. */
+  expiry_field?: string | null;
 };
 
 type ListResponse = { property_id: string; buckets: Record<string, Stored[]> };
@@ -69,6 +71,8 @@ export default function PropertyUploads() {
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
+  // e.g. "Gas Safety Certificate renewed - the tenant must be served the new copy…"
+  const [notices, setNotices] = useState<string[]>([]);
 
   async function refresh() {
     setErr(null);
@@ -125,6 +129,10 @@ export default function PropertyUploads() {
         {err && <div className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded px-3 py-1.5">{err}</div>}
       </div>
 
+      {notices.map((n, i) => (
+        <div key={i} className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded px-3 py-2">{n}</div>
+      ))}
+
       <div className="grid gap-4 lg:grid-cols-2">
         {rows.map((r) => (
           <BucketCard
@@ -132,25 +140,40 @@ export default function PropertyUploads() {
             meta={r}
             files={r.files}
             busy={busyKey?.startsWith(r.name + "::") ? busyKey.split("::")[1] : null}
-            onUpload={async (file, oldFilename) => {
+            onUpload={async (files, oldFilename, expiry) => {
               setBusyKey(`${r.name}::${oldFilename ?? "new"}`);
-              setErr(null); setFlash(null);
-              try {
-                const form = new FormData();
-                form.append("file", file, file.name);
-                const qs = oldFilename ? `?delete_filename=${encodeURIComponent(oldFilename)}` : "";
-                await api.post(
-                  `/api/uploads/agent/${propertyId}/${r.name}/replace${qs}`,
-                  form,
-                  { headers: { "Content-Type": "multipart/form-data" } },
-                );
-                await refresh();
-                setFlash(`Uploaded → ${prettyName(r.name)}.`);
-              } catch (e: any) {
-                setErr(e?.response?.data?.detail ?? "Upload failed");
-              } finally {
-                setBusyKey(null);
+              setErr(null); setFlash(null); setNotices([]);
+              const seen: string[] = [];
+              // A replace swaps exactly one file; a new upload takes every file picked.
+              // One bad file doesn't stop the rest - failures are listed after.
+              const failed: string[] = [];
+              for (const file of files) {
+                try {
+                  const form = new FormData();
+                  form.append("file", file, file.name);
+                  if (expiry) form.append("expiry", expiry);
+                  const qs = oldFilename ? `?delete_filename=${encodeURIComponent(oldFilename)}` : "";
+                  const { data } = await api.post(
+                    `/api/uploads/agent/${propertyId}/${r.name}/replace${qs}`,
+                    form,
+                    { headers: { "Content-Type": "multipart/form-data" } },
+                  );
+                  for (const n of data?.notices ?? []) if (!seen.includes(n)) seen.push(n);
+                } catch (e: any) {
+                  failed.push(`${file.name}: ${e?.response?.data?.detail ?? "upload failed"}`);
+                }
               }
+              await refresh();
+              const ok = files.length - failed.length;
+              if (ok > 0) {
+                setFlash((oldFilename
+                  ? `Replaced → ${prettyName(r.name)}.`
+                  : `Uploaded ${ok} file${ok === 1 ? "" : "s"} → ${prettyName(r.name)}.`)
+                  + (expiry ? ` Expiry ${expiry} saved.` : ""));
+              }
+              setNotices(seen);
+              if (failed.length > 0) setErr(`Not uploaded — ${failed.join("; ")}`);
+              setBusyKey(null);
             }}
             onDelete={async (filename) => {
               if (!confirm(`Delete ${prettyFilename(filename)}? This can't be undone.`)) return;
@@ -184,20 +207,58 @@ function BucketCard({
   meta: BucketMeta;
   files: Stored[];
   busy: string | null;
-  onUpload: (file: File, oldFilename?: string) => Promise<void>;
+  onUpload: (files: File[], oldFilename?: string, expiry?: string) => Promise<void>;
   onDelete: (filename: string) => Promise<void>;
 }) {
   const newFileRef = useRef<HTMLInputElement | null>(null);
   const replaceRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const [dragOver, setDragOver] = useState(false);
+  const [expiry, setExpiry] = useState("");
+  const [needDate, setNeedDate] = useState(false);
+  const needsExpiry = !!meta.expiry_field;
+
+  // A certificate and its expiry date are stored together (the renewal check
+  // and the 28-day re-serve prompt key off the date), so no date, no upload.
+  function upload(picked: File[], oldFilename?: string) {
+    if (picked.length === 0 || busy) return;
+    if (needsExpiry && !expiry) { setNeedDate(true); return; }
+    setNeedDate(false);
+    onUpload(picked, oldFilename, needsExpiry ? expiry : undefined);
+  }
 
   return (
-    <section className="card p-5 space-y-3">
+    <section
+      className={`card p-5 space-y-3 transition-shadow ${dragOver ? "ring-2 ring-navy-400" : ""}`}
+      onDragOver={(e) => { e.preventDefault(); if (!busy) setDragOver(true); }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragOver(false);
+        upload(Array.from(e.dataTransfer.files));
+      }}>
       <header className="flex items-start justify-between gap-3">
         <div>
           <h3 className="font-serif text-base font-semibold text-navy-700 leading-tight">{prettyName(meta.name)}</h3>
           <div className="text-xs uppercase tracking-kicker text-ink-muted mt-1">{meta.name}</div>
         </div>
       </header>
+
+      {needsExpiry && (
+        <label className="block">
+          <span className="text-xs text-ink-soft">Expiry date on this certificate</span>
+          <input
+            type="date"
+            className={`input text-sm w-full mt-1 ${needDate ? "border-rose-400" : ""}`}
+            value={expiry}
+            onChange={(e) => { setExpiry(e.target.value); setNeedDate(false); }}
+          />
+          <span className={`text-[11px] ${needDate ? "text-rose-700" : "text-ink-muted"}`}>
+            {needDate
+              ? "Enter the expiry date shown on the certificate first — it's stored with the file so the two can't drift apart."
+              : "Saved against the property with the file. If this replaces a certificate the tenant already holds, they must be served the new copy within 28 days of the inspection."}
+          </span>
+        </label>
+      )}
 
       {files.length === 0 ? (
         <div className="text-sm text-ink-muted italic">No files uploaded yet.</div>
@@ -235,7 +296,7 @@ function BucketCard({
                   className="hidden"
                   onChange={(e) => {
                     const picked = e.target.files?.[0];
-                    if (picked) onUpload(picked, f.filename);
+                    if (picked) upload([picked], f.filename);
                     e.target.value = "";
                   }}
                 />
@@ -250,15 +311,16 @@ function BucketCard({
         className="btn-secondary text-xs w-full"
         disabled={busy === "new"}
         onClick={() => newFileRef.current?.click()}>
-        {busy === "new" ? "Uploading…" : "+ Upload new file"}
+        {busy === "new" ? "Uploading…" : "+ Upload files"}
       </button>
+      <p className="text-[11px] text-ink-muted text-center -mt-1">Pick several at once, or drop them on this card.</p>
       <input
         type="file"
         ref={newFileRef}
         className="hidden"
+        multiple
         onChange={(e) => {
-          const picked = e.target.files?.[0];
-          if (picked) onUpload(picked);
+          upload(Array.from(e.target.files ?? []));
           e.target.value = "";
         }}
       />
