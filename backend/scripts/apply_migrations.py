@@ -9,6 +9,9 @@ Run from ``backend/``:
 
     python -m scripts.apply_migrations            # apply, then verify
     python -m scripts.apply_migrations --verify   # just print the current schema
+    python -m scripts.apply_migrations --only 004_sent_document_versions.sql
+                                                  # apply one new file to a database
+                                                  # that already has the earlier ones
 
 This is an alternative to the Supabase MCP server / SQL editor for applying the
 schema; the resulting tables are identical. For a brand-new project run it
@@ -47,10 +50,18 @@ def _safe_host(url: str) -> str:
     return tail
 
 
-def apply_all() -> None:
+def apply_all(only: list[str] | None = None) -> None:
     files = sorted(_MIGRATIONS.glob("*.sql"))
     if not files:
         raise SystemExit(f"No .sql files found in {_MIGRATIONS}")
+    if only:
+        # An already-migrated database (e.g. the live project) takes new files
+        # one at a time - replaying 001 against it fails on the first table.
+        wanted = set(only)
+        files = [f for f in files if f.name in wanted or f.stem in wanted]
+        missing = wanted - {f.name for f in files} - {f.stem for f in files}
+        if missing:
+            raise SystemExit(f"No such migration: {', '.join(sorted(missing))}")
     print(f"Target: {_safe_host(settings.supabase_db_url)}")
     print(f"Migrations: {', '.join(f.name for f in files)}\n")
 
@@ -100,5 +111,10 @@ def verify() -> None:
 if __name__ == "__main__":
     if "--verify" in sys.argv:
         verify()
+    elif "--only" in sys.argv:
+        names = sys.argv[sys.argv.index("--only") + 1:]
+        if not names:
+            raise SystemExit("--only needs at least one migration file name")
+        apply_all(only=names)
     else:
         apply_all()

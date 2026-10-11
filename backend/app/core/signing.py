@@ -25,6 +25,7 @@ from app.core.docusign_client import (
     EnvelopeCc,
     EnvelopeSigner,
     create_envelope,
+    void_envelope,
 )
 from app.core.docuseal_client import (
     MOCK_DOCUSEAL_SUBMISSIONS,
@@ -153,6 +154,23 @@ async def send_for_signature(
         )
 
     # Unreachable — _provider_for_env raises if env is wrong.
+    raise RuntimeError(f"Unknown signing provider: {provider}")
+
+
+async def void_submission(submission_id: str, reason: str) -> None:
+    """Cancel an envelope that has not been signed yet, so it can no longer be
+    signed. The provider notifies its recipients that it was voided.
+
+    Raises if the provider refuses - typically because the envelope was signed
+    or declined in the meantime - so the caller can tell the agent.
+    """
+    provider = _provider_for_env()
+    if provider == "docusign":
+        await void_envelope(submission_id, reason)
+        return
+    if provider == "mock":
+        logger.info("signing.mock_void id=%s reason=%s", submission_id, reason)
+        return
     raise RuntimeError(f"Unknown signing provider: {provider}")
 
 

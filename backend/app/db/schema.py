@@ -439,9 +439,25 @@ SCHEMAS: dict[str, TableSchema] = {
             "Envelope ID": Col("envelope_id"),
             "Status": Col("status"),
             "Completed Date": Col("completed_date", "date"),
+            # Versioning (004): a resend that revises an earlier send.
+            "Version": Col("version", "int"),
+            "Revises ID": Col("revises_id", "uuid"),
+            "Superseded At": Col("superseded_at", "timestamptz"),
         },
         links={
             "Property": Link("sent_documents_properties", "sent_document_id", "property_id", "properties"),
+        },
+    ),
+
+    # ------------------------------------------------- sent_document_bodies
+    # The exact HTML a send delivered (004). One row per sent_documents row,
+    # kept apart so listing sends never loads the bodies.
+    "sent_document_bodies": TableSchema(
+        sql_table="sent_document_bodies",
+        columns={
+            **_AGENCY,
+            "Sent Document ID": Col("sent_document_id", "uuid"),
+            "Body HTML": Col("body_html"),
         },
     ),
 

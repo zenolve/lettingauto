@@ -31,7 +31,12 @@ from app.core.auth import Agent, require_agent
 from app.core.email_client import send_email
 from app.core.logger import get_logger
 from app.core.pdf_renderer import html_to_pdf, html_to_pdf_chromium, render_contract_html
-from app.core.signing import SigningRecipient, replay_mock_completion, send_for_signature
+from app.core.signing import (
+    SigningRecipient,
+    replay_mock_completion,
+    send_for_signature,
+    void_submission,
+)
 from app.db import supabase_client as at
 from app.routers.uploads import UPLOADS_ROOT, _public_url
 from app.services.document_library import (
@@ -326,13 +331,23 @@ def list_sent_for_property(
 def prepare_library_doc(
     doc_id: str,
     property_id: str,
+    from_sent: Optional[str] = Query(None, description="Revise this earlier send: start from the copy that went out"),
     _: Agent = Depends(require_agent),
 ) -> dict[str, Any]:
+    from app.services import sent_documents as sd  # noqa: PLC0415 — avoid load cycle
     doc = get_document(doc_id)
     if not doc:
         raise HTTPException(404, f"Unknown library document: {doc_id}")
     merge_ctx = build_merge_context(property_id)
     body_html = get_body(doc)
+    revising = None
+    if from_sent:
+        row = _sent_row_for(from_sent, property_id, doc_id)
+        # Sends from before versioning kept no copy; those revise from the template.
+        snapshot = sd.get_body(from_sent)
+        if snapshot:
+            body_html = snapshot
+        revising = {**sd.summarise(row), "from_snapshot": bool(snapshot)}
     return {
         "document": {
             "id": doc.id,
@@ -347,7 +362,23 @@ def prepare_library_doc(
         "audience": get_audience(doc_id),
         "merge_fields": merge_ctx,
         "merge_field_catalogue": MERGE_FIELD_CATALOGUE,
+        # The send a new send of this document would replace (None if never sent).
+        "previous": sd.current_version(property_id, doc_id),
+        "revising": revising,
     }
+
+
+def _sent_row_for(sent_id: str, property_id: str, doc_id: str) -> dict:
+    """A sent row of this document on this property; 404/400 otherwise."""
+    from app.services import sent_documents as sd  # noqa: PLC0415 — avoid load cycle
+    try:
+        row = sd.get_sent(sent_id)
+    except Exception:  # noqa: BLE001 — unknown id, other agency, or malformed uuid
+        raise HTTPException(404, "That sent version no longer exists.")
+    f = row.get("fields", {})
+    if property_id not in (f.get("Property") or []) or f.get("Doc ID") != doc_id:
+        raise HTTPException(400, "That sent version belongs to a different document or property.")
+    return row
 
 
 # ---------------------------------------------------------------------------
@@ -376,6 +407,12 @@ class SendRequest(BaseModel):
     # Map of /pg_sigN/ anchor → signature id, e.g. {"/pg_sig1/": "lesley_smith"}.
     # Unset slots fall back to the first available signature in the registry.
     signature_choices: dict[str, str] = Field(default_factory=dict)
+    # The earlier send of this document that this one replaces (the editor's
+    # "replaces vN" option). Must be the current version, not an older one.
+    revises_id: Optional[str] = None
+    # Also void the replaced send's signing envelope so it can no longer be
+    # signed. Its recipients are notified by the signing provider.
+    void_previous: bool = False
 
 
 _MERGE_TOKEN = re.compile(r"\{\{\s*([a-z_][a-z0-9_]*)\s*\}\}", re.IGNORECASE)
@@ -584,9 +621,24 @@ async def send_library_doc(
     body: SendRequest,
     agent: Agent = Depends(require_agent),
 ) -> dict[str, Any]:
+    from app.services import sent_documents as sd  # noqa: PLC0415 — avoid load cycle
     doc = get_document(doc_id)
     if not doc:
         raise HTTPException(404, f"Unknown library document: {doc_id}")
+
+    # A revision must replace the current version - revising an older one would
+    # fork the history. Checked before sending so a bad request sends nothing.
+    previous = None
+    if body.revises_id:
+        previous = _sent_row_for(body.revises_id, property_id, doc_id)
+        if previous["fields"].get("Superseded At"):
+            raise HTTPException(
+                409,
+                "That version has already been replaced by a later send. "
+                "Revise the current version instead.",
+            )
+    elif body.void_previous:
+        raise HTTPException(400, "Nothing to void - this send does not replace an earlier one.")
 
     # Final interpolation against current Airtable values
     merge_ctx = build_merge_context(property_id)
@@ -716,9 +768,8 @@ async def send_library_doc(
     # Structured row instead of the old Submissions "Library:" JSON-text hack.
     # The envelope id is stored so the signing webhook can flip Status to
     # Signed/Declined later (PG_04). Best-effort — never breaks the send.
-    from app.services import sent_documents as sd  # noqa: PLC0415 — avoid load cycle
     submission_info = result.get("submission") or {}
-    sd.record_sent(
+    sent_id = sd.record_sent(
         property_id=property_id,
         doc_id=doc_id,
         doc_name=doc.name,
@@ -729,5 +780,28 @@ async def send_library_doc(
         envelope_id=submission_info.get("id"),
         sent_by=getattr(agent, "email", None) or "agent",
         status="Sent",
+        revises_id=body.revises_id,
+        body_html=final_body,
     )
+    if sent_id:
+        result["sent_document_id"] = sent_id
+        try:
+            result["version"] = sd.summarise(sd.get_sent(sent_id))["version"]
+        except Exception:  # noqa: BLE001
+            pass
+
+    # Void the replaced envelope only now that its revision is out: a failed
+    # send must never leave the recipient with nothing valid to sign.
+    if previous and body.void_previous and sd.summarise(previous)["envelope_open"]:
+        envelope_id = previous["fields"]["Envelope ID"]
+        try:
+            await void_submission(envelope_id, reason=f"Replaced by a revised version: {body.title}")
+            sd.mark_voided(previous["id"])
+            result["previous_voided"] = True
+        except Exception as e:  # noqa: BLE001
+            logger.warning("library.void_previous_failed env=%s err=%s", envelope_id, e)
+            result["previous_void_error"] = (
+                "The new version was sent, but the previous envelope could not be voided "
+                f"({e}). Void it in DocuSign so the old version can't be signed."
+            )
     return result

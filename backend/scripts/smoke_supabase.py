@@ -69,7 +69,9 @@ async def main() -> None:
     from app.handlers.pg_import import handle_import, was_imported
     from app.models.common import ImportTenancyInput, OfferInput, PropertyTakeonInput
     from app.services.offers import accept_offer, offers_for_property
-    from app.services.sent_documents import record_sent, update_status_by_envelope
+    from app.services.sent_documents import (
+        current_version, get_body, record_sent, update_status_by_envelope,
+    )
 
     # ---------------------------------------------------- agencies + isolation
     # The commercial product is multi-tenant: create two agencies and run the
@@ -192,6 +194,21 @@ async def main() -> None:
     sd = at.get(at.TableNames.SENT_DOCUMENTS, sd_id, fresh=True)["fields"]
     check("sent doc Signed + completed", sd.get("Status") == "Signed" and bool(sd.get("Completed Date")))
 
+    # Versioning (004): a revision links back, supersedes, and keeps its copy.
+    # These exercise the uuid-typed columns against real Postgres.
+    v2_id = record_sent(property_id=pid, doc_id="tpl_01", doc_name="Smoke Letter",
+                        stage=2, channel="Email HTML", recipients=["smoke-landlord@example.com"],
+                        sent_by="smoke", revises_id=sd_id, body_html="<p>Smoke letter, revised</p>")
+    v1f = at.get(at.TableNames.SENT_DOCUMENTS, sd_id, fresh=True)["fields"]
+    v2f = at.get(at.TableNames.SENT_DOCUMENTS, v2_id, fresh=True)["fields"]
+    check("revision is v2 and links back",
+          v2f.get("Version") == 2 and v2f.get("Revises ID") == sd_id,
+          f"v={v2f.get('Version')} revises={v2f.get('Revises ID')}")
+    check("revised send marked superseded", bool(v1f.get("Superseded At")), str(v1f.get("Superseded At")))
+    check("sent copy stored + found by uuid", get_body(v2_id) == "<p>Smoke letter, revised</p>")
+    check("current version is the revision",
+          (current_version(pid, "tpl_01") or {}).get("submission_id") == v2_id)
+
     # ------------------------------------------------------------- PG_06 diary
     at.create(at.TableNames.DIARY, {
         "Diary_Type": "Reminder",
@@ -279,7 +296,7 @@ async def main() -> None:
         (at.TableNames.DIARY, at.get(at.TableNames.PROPERTIES, pid, fresh=True)["fields"].get("Diary") or []),
         (at.TableNames.GATE_LOG, at.get(at.TableNames.PROPERTIES, pid, fresh=True)["fields"].get("Gate_Log") or []),
         (at.TableNames.SUBMISSIONS, at.get(at.TableNames.PROPERTIES, pid, fresh=True)["fields"].get("Submissions") or []),
-        (at.TableNames.SENT_DOCUMENTS, [sd_id]),
+        (at.TableNames.SENT_DOCUMENTS, [sd_id, v2_id]),
         (at.TableNames.PAYMENTS, [pay["id"]]),
     ]:
         for rid in ids:
@@ -291,6 +308,7 @@ async def main() -> None:
         check("property gone after delete", False)
     except Exception:
         check("property gone after delete", True)
+    check("sent copy removed with its send (FK cascade)", get_body(v2_id) is None)
 
     # Remove the smoke agencies (unscoped system op; FK cascade clears any
     # stragglers the per-row deletes above missed).

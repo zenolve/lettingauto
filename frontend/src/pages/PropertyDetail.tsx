@@ -13,6 +13,7 @@ import { OffersPanel } from "../components/ui/OffersPanel";
 import { TenancyChecklist } from "../components/ui/TenancyChecklist";
 import { WarningsRecap } from "../components/ui/WarningsRecap";
 import { api, PropertyDetail as PD } from "../lib/api";
+import { groupVersions, sentWhen } from "../lib/sentVersions";
 import { deriveCurrentStage, resolveViewStage, stageByOrder } from "../lib/stages";
 
 // Legacy quick links to the per-template editor. New "Browse document library"
@@ -691,6 +692,14 @@ type SentDoc = {
   submitted_date?: string;
   status?: string;
   completed_date?: string;
+  // Versioning (migration 004)
+  sent_at?: string;
+  version?: number;
+  revises_id?: string | null;
+  superseded_at?: string | null;
+  envelope_open?: boolean;
+  /** A library document the agent can open again as a revision. */
+  revisable?: boolean;
 };
 
 function SentStatusBadge({ status }: { status?: string }) {
@@ -795,26 +804,67 @@ function DocumentsSentOnStage({ propertyId, stage }: { propertyId: string; stage
   }, [propertyId, stage]);
   const onStage = rows.filter((r) => r.stage === stage);
   if (onStage.length === 0) return null;
+  // One entry per document: its current version, with the versions it replaced underneath.
+  const chains = groupVersions(onStage);
   return (
     <section className="card p-4 bg-slate-50/60">
       <h3 className="text-xs uppercase tracking-wide text-slate-500 mb-2">Documents sent at this stage</h3>
-      <ul className="space-y-1 text-sm">
-        {onStage.map((r) => (
-          <li key={r.submission_id} className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="font-medium text-slate-800 truncate">{r.doc_name}</span>
-                <SentStatusBadge status={r.status} />
+      <ul className="space-y-2 text-sm">
+        {chains.map(({ current: r, earlier }) => (
+          <li key={r.submission_id}>
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-slate-800 truncate">{r.doc_name}</span>
+                  {(r.version ?? 1) > 1 && (
+                    <span className="text-[11px] px-1.5 py-0.5 rounded border bg-white text-ink-soft border-cream-300">
+                      v{r.version}
+                    </span>
+                  )}
+                  <SentStatusBadge status={r.status} />
+                </div>
+                <div className="text-xs text-slate-500 truncate">
+                  {sentWhen(r)} · {modeLabel(r.mode)}
+                  {r.recipients.length > 0 && <> · to {r.recipients.join(", ")}</>}
+                </div>
               </div>
-              <div className="text-xs text-slate-500 truncate">
-                {r.submitted_date} · {modeLabel(r.mode)}
-                {r.recipients.length > 0 && <> · to {r.recipients.join(", ")}</>}
+              <div className="flex items-center gap-1 shrink-0">
+                {r.revisable && (
+                  <Link to={`/agent/properties/${propertyId}/library/${r.doc_id}?revise=${r.submission_id}`}
+                        className="btn-ghost text-sm">
+                    Revise
+                  </Link>
+                )}
+                {r.pdf_url ? (
+                  <a href={r.pdf_url} target="_blank" rel="noreferrer" className="btn-ghost text-navy-700 text-sm">View PDF →</a>
+                ) : (
+                  <span className="text-xs text-slate-400">No PDF</span>
+                )}
               </div>
             </div>
-            {r.pdf_url ? (
-              <a href={r.pdf_url} target="_blank" rel="noreferrer" className="btn-ghost text-navy-700 text-sm">View PDF →</a>
-            ) : (
-              <span className="text-xs text-slate-400">No PDF</span>
+            {earlier.length > 0 && (
+              <details className="mt-1 ml-2">
+                <summary className="text-xs text-ink-muted cursor-pointer select-none">
+                  {earlier.length} earlier version{earlier.length === 1 ? "" : "s"}
+                </summary>
+                <ul className="mt-1 space-y-1 border-l border-cream-300 pl-3">
+                  {earlier.map((e) => (
+                    <li key={e.submission_id} className="flex items-center justify-between gap-3 text-xs text-slate-500">
+                      <span className="min-w-0 truncate">
+                        v{e.version ?? 1} · {sentWhen(e)} · {modeLabel(e.mode)}
+                        {e.status === "Voided" ? " · voided"
+                          : e.status === "Signed" ? <span className="text-rose-700"> · signed after it was replaced</span>
+                          : " · superseded"}
+                      </span>
+                      {e.pdf_url ? (
+                        <a href={e.pdf_url} target="_blank" rel="noreferrer" className="text-navy-700 hover:underline shrink-0">View PDF</a>
+                      ) : (
+                        <span className="text-slate-400 shrink-0">No PDF</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </details>
             )}
           </li>
         ))}

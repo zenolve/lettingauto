@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { ContractEditor, EditorHandle } from "../components/ContractEditor";
 import { BackLink } from "../components/ui/BackLink";
 import { api } from "../lib/api";
 import { MERGE_DESCRIPTIONS } from "../lib/mergeFieldInfo";
+import { sentWhen } from "../lib/sentVersions";
 
 type MergeField = { group: string; key: string; label: string };
 type LibraryDoc = {
@@ -16,12 +17,29 @@ type LibraryDoc = {
   signers: string[];
   description: string;
 };
+/** A send of this document on this property (backend sent_documents.summarise). */
+type SentVersion = {
+  submission_id: string;
+  version: number;
+  sent_at?: string;
+  submitted_date?: string;
+  status?: string;
+  recipients: string[];
+  /** Its signing envelope can still be signed - what "void" acts on. */
+  envelope_open: boolean;
+  /** Only on `revising`: whether a copy of what went out was kept. */
+  from_snapshot?: boolean;
+};
 type PrepareResp = {
   document: LibraryDoc;
   body_html: string;
   merge_fields: Record<string, any>;
   merge_field_catalogue: MergeField[];
   audience?: string[];
+  /** The current send of this document, which a new send would replace. */
+  previous?: SentVersion | null;
+  /** Set when opened via "Revise": the send the editor body was loaded from. */
+  revising?: SentVersion | null;
 };
 
 type SendMode = "sign" | "email_pdf" | "email_html";
@@ -74,9 +92,18 @@ export default function LibraryEditor() {
   const handleRef = useRef<EditorHandle | null>(null);
   const [selectedAttribute, setSelectedAttribute] = useState<string | null>(null);
   const [fieldFilter, setFieldFilter] = useState("");
+  // Opened from "Revise" on the property page: start from that send's copy.
+  const [searchParams] = useSearchParams();
+  const reviseId = searchParams.get("revise");
+  // A send of a document already sent here replaces that version unless the
+  // agent unticks it (e.g. a confirmation for a different offer). An envelope
+  // still open for signing can be voided so the outdated version can't be signed.
+  const [replacesPrevious, setReplacesPrevious] = useState(true);
+  const [voidPrevious, setVoidPrevious] = useState(true);
 
   useEffect(() => {
-    api.get<PrepareResp>(`/api/library/${docId}/prepare/${propertyId}`)
+    const fromSent = reviseId ? `?from_sent=${encodeURIComponent(reviseId)}` : "";
+    api.get<PrepareResp>(`/api/library/${docId}/prepare/${propertyId}${fromSent}`)
       .then((r) => {
         setData(r.data);
         setHtml(interpolate(r.data.body_html, r.data.merge_fields));
@@ -123,7 +150,7 @@ export default function LibraryEditor() {
         }
       })
       .catch(() => setSignatures([]));
-  }, [propertyId, docId]);
+  }, [propertyId, docId, reviseId]);
 
   // Which /pg_sigN/ anchors the current document body uses. Live — re-evaluates
   // on every keystroke so the dropdowns appear/disappear as the agent edits.
@@ -206,6 +233,13 @@ export default function LibraryEditor() {
 
   async function send() {
     if (!data) return;
+    const previous = data.previous ?? null;
+    const replacing = !!previous && replacesPrevious;
+    const voiding = replacing && !!previous?.envelope_open && voidPrevious;
+    if (voiding && !confirm(
+      `Void the signing envelope for v${previous!.version}? It can no longer be signed, and DocuSign ` +
+      "tells its recipients it was cancelled. This version is sent first.",
+    )) return;
     setBusy(true); setError(null); setDone(null);
     try {
       const payload: any = {
@@ -216,9 +250,14 @@ export default function LibraryEditor() {
         signature_choices: signatureChoices,
       };
       if (mode === "email_pdf") payload.email_cover_html = coverHtml;
+      if (replacing) payload.revises_id = previous!.submission_id;
+      if (voiding) payload.void_previous = true;
       const { data: r } = await api.post(`/api/library/${docId}/send/${propertyId}`, payload);
       setDone(r);
-      setTimeout(() => nav(`/agent/properties/${propertyId}?stage=${data.document.stage}`), 2200);
+      // Stay put when the old envelope couldn't be voided - the agent has to act on it.
+      if (!r.previous_void_error) {
+        setTimeout(() => nav(`/agent/properties/${propertyId}?stage=${data.document.stage}`), 2200);
+      }
     } catch (e: any) {
       setError(e?.response?.data?.detail ?? "Send failed");
     } finally {
@@ -247,6 +286,15 @@ export default function LibraryEditor() {
               Placeholder content — replace with real text or merge fields before sending.
             </p>
           )}
+          {data.revising && (
+            <p className="text-xs mt-2 inline-block px-2 py-1 rounded bg-cream-100 text-ink-soft border border-cream-300">
+              Revising v{data.revising.version}
+              {sentWhen(data.revising) && <>, sent {sentWhen(data.revising)}</>}.{" "}
+              {data.revising.from_snapshot
+                ? "This starts from the copy that went out."
+                : "No copy of that version was kept, so this starts from the template."}
+            </p>
+          )}
         </div>
 
         <ContractEditor initialHtml={html} onChange={setHtml}
@@ -273,7 +321,18 @@ export default function LibraryEditor() {
             <strong>Sent ({MODE_LABEL[mode]}).</strong>{" "}
             {done.sent_to && done.sent_to.length > 0 && <>Delivered to {done.sent_to.join(", ")}.</>}
             {done.docuseal?.id && <> DocuSeal ref <code>{done.docuseal.id}</code>.</>}
-            <div className="text-xs mt-1">Redirecting back to property…</div>
+            {done.version > 1 && <> Saved as v{done.version}.</>}
+            {done.previous_voided && <> The previous version's envelope was voided.</>}
+            {done.previous_void_error ? (
+              <div className="text-xs mt-2 px-2 py-1.5 rounded bg-amber-50 text-amber-900 border border-amber-200">
+                {done.previous_void_error}{" "}
+                <button className="underline" onClick={() => nav(`/agent/properties/${propertyId}?stage=${data.document.stage}`)}>
+                  Back to property
+                </button>
+              </div>
+            ) : (
+              <div className="text-xs mt-1">Redirecting back to property…</div>
+            )}
           </div>
         )}
         {error && <div className="card p-4 bg-rose-50 border-rose-200 text-rose-700">{error}</div>}
@@ -503,6 +562,37 @@ export default function LibraryEditor() {
           </div>
         )}
 
+        {data.previous && (
+          <section className="card p-4 space-y-2">
+            <h3 className="text-sm font-semibold text-slate-700">Already sent</h3>
+            <label className="flex items-start gap-2 text-sm cursor-pointer">
+              <input type="checkbox" className="mt-1" checked={replacesPrevious}
+                     onChange={(e) => setReplacesPrevious(e.target.checked)} />
+              <span>
+                This replaces <strong>v{data.previous.version}</strong>
+                {sentWhen(data.previous) && <>, sent {sentWhen(data.previous)}</>}
+                <span className="block text-xs text-slate-500">
+                  Saved as v{data.previous.version + 1}; v{data.previous.version} stays in the history,
+                  marked superseded. Untick if this is a separate document, e.g. for a different offer.
+                </span>
+              </span>
+            </label>
+            {replacesPrevious && data.previous.envelope_open && (
+              <label className="flex items-start gap-2 text-sm cursor-pointer pl-6">
+                <input type="checkbox" className="mt-1" checked={voidPrevious}
+                       onChange={(e) => setVoidPrevious(e.target.checked)} />
+                <span>
+                  Void v{data.previous.version}'s signing envelope
+                  <span className="block text-xs text-slate-500">
+                    It is still open for signature. Voiding stops anyone signing the outdated version;
+                    DocuSign tells its recipients.
+                  </span>
+                </span>
+              </label>
+            )}
+          </section>
+        )}
+
         <div className="grid grid-cols-2 gap-2">
           <button className="btn-secondary" onClick={openPreview} disabled={previewBusy}>
             {previewBusy ? "Rendering…" : "Preview in new tab"}
@@ -513,6 +603,7 @@ export default function LibraryEditor() {
         </div>
         <button className="btn-primary w-full" onClick={send} disabled={busy || recipients.length === 0}>
           {busy ? "Sending…" : MODE_LABEL[mode]}
+          {!busy && data.previous && replacesPrevious && <> · v{data.previous.version + 1}</>}
         </button>
       </aside>
     </div>
