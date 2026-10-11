@@ -16,10 +16,10 @@ commercial changes to them.
 ## Commands
 
 ```bash
-# Backend tests (115 unit tests; APP_ENV=test disables cache + uses mock signer)
+# Backend tests (133 unit tests; APP_ENV=test disables cache + uses mock signer)
 cd backend && APP_ENV=test python -m pytest tests -q
 
-# End-to-end smoke vs a real DB (51 checks incl. multi-tenant isolation, import, versioning).
+# End-to-end smoke vs a real DB (60 checks incl. multi-tenant isolation, import, versioning, re-let).
 # Creates and deletes its own data — safe on the live project.
 cd backend && python -m scripts.smoke_supabase
 
@@ -81,6 +81,24 @@ form creates NOTHING — the payload is stored on a pending `payments` row
 success-page poller; `at.try_transition` (status CAS pending→succeeded) makes
 it exactly-once. With no `STRIPE_SECRET_KEY`, billing is disabled and take-on
 creates immediately (dev mode).
+
+### Tenancy cycles = end tenancy, then re-let (migration 005)
+The property row carries ONE tenancy at a time: signatures, deposit, served
+flags, dates and `Properties.Tenant` sit beside the landlord, certificates and
+`TC_Signed`, and the stage is derived from those fields —
+`app/services/stages.py` is the single backend copy (mirrors `stages.ts`).
+"End tenancy" sets `Tenancy Ended Date` (→ stage 9). "Re-let"
+(`services/tenancies.py`) archives the tenancy into `tenancies` (a snapshot of
+every `TENANCY_FIELDS` value + tenant ids), resets exactly those fields,
+cancels the tenancy's pending diary alerts and stamps `Tenancy Cycle Started
+At`; the property re-derives to Offer. Landlord, certificates and `TC_Signed`
+carry over. A re-let is a new tenancy → £50 pay-first via
+`billing.create_relet_intent` (the payment row carries `property_id` from the
+start; fulfilled = `metadata.relet.tenancy_id`). Tenancy-related records
+created before the cycle start (stage ≥ 4 sends, offers, the merge-field
+tenant) belong to an archived tenancy — use
+`tenancies.belongs_to_previous_tenancy`. Offers and acceptances are refused
+from stage 7 (`ensure_no_tenancy_in_progress`).
 
 ### Branding is per-agency at runtime
 `app/core/branding.get_brand()` resolves the CURRENT agency's name/colours
@@ -146,10 +164,12 @@ backend/app/
     offers.py               # offer lifecycle (accept/supersede/close)
     merge_fields.py         # {{merge_field}} context from records (incl. agency_*)
     document_library.py / prescribed_docs.py / sent_documents.py / compliance.py / derivations.py
+    stages.py               # derive_stage(fields): the one backend stage derivation
+    tenancies.py            # end tenancy / re-let (archive + reset) / history
   templates/                # emails/ (Jinja), contracts/ (_shell.html), library/ (43 tpls + master TA/T&C)
 backend/scripts/
   apply_migrations.py       # run supabase/migrations/*.sql against SUPABASE_DB_URL + verify
-  smoke_supabase.py         # 51-check e2e incl. multi-tenant isolation, import, versioning (safe on live DB)
+  smoke_supabase.py         # 60-check e2e incl. multi-tenant isolation, import, versioning, re-let (safe on live DB)
 frontend/src/
   lib/                      # api.ts (axios+auth), auth.ts (supabase session), agency.ts (me store), supabase.ts, stages.ts
   components/               # AgencyGate, OnboardingModal, RequireAuth, layout/{Agent,Public}Layout, ui/* (incl. EntityEditDrawer)
@@ -157,7 +177,7 @@ frontend/src/
                             # TakeonComplete (payment poller), forms/* (takeon/offer/landlord forms), Library*, Signatures
   styles.css + ../tailwind.config.js   # the Editorial Mesh design system (tokens + primitives)
 frontend/design-previews/   # landing drafts A–F (F chosen)
-supabase/migrations/        # 001 schema+seed, 002 agencies/RLS, 003 form routing, 004 sent-doc versions (all applied to live)
+supabase/migrations/        # 001 schema+seed, 002 agencies/RLS, 003 form routing, 004 sent-doc versions, 005 tenancy cycles (all applied to live)
 docs/                       # BUSINESS_MODEL.md, COMMERCIAL_SETUP.md, SUPABASE_MIGRATION.md
 ```
 
@@ -170,7 +190,7 @@ docs/                       # BUSINESS_MODEL.md, COMMERCIAL_SETUP.md, SUPABASE_M
   OAuth providers, Stripe, env vars, first-run walkthrough).
 - `docs/SUPABASE_MIGRATION.md` — how/why the Airtable→Supabase adapter works.
 - `supabase/migrations/` — 001 schema+seed, 002 agencies/RLS, 003 form
-  routing, 004 sent-document versions. Append-only; new DDL = new idempotent
-  file (all four are applied to the live project).
+  routing, 004 sent-document versions, 005 tenancy cycles. Append-only; new
+  DDL = new idempotent file (all five are applied to the live project).
 - `docs/BACKLOG.md` — deferred work with enough context to pick up cold
-  (signed-PDF capture, template history, re-letting).
+  (signed-PDF capture, template history).

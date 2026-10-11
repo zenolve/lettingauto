@@ -168,6 +168,10 @@ SCHEMAS: dict[str, TableSchema] = {
             "Checkout_Date": Col("checkout_date", "date"),
             "Inventory_Clerk": Col("inventory_clerk"),
             "Westminster_Licence_Number": Col("westminster_licence_number"),
+            # Tenancy cycles (005): "End tenancy" sets the end date (stage 9);
+            # "Re-let" archives the tenancy and stamps when the next one began.
+            "Tenancy Ended Date": Col("tenancy_ended_date", "date"),
+            "Tenancy Cycle Started At": Col("tenancy_cycle_started_at", "timestamptz"),
         },
         links={
             "Stage": Link("property_stage", "property_id", "stage_id", "stages"),
@@ -446,6 +450,26 @@ SCHEMAS: dict[str, TableSchema] = {
         },
         links={
             "Property": Link("sent_documents_properties", "sent_document_id", "property_id", "properties"),
+        },
+    ),
+
+    # --------------------------------------------------------------- tenancies
+    # One row per archived tenancy (005), written by "Re-let".
+    "tenancies": TableSchema(
+        sql_table="tenancies",
+        columns={
+            **_AGENCY,
+            "Property ID": Col("property_id", "uuid"),
+            "Sequence": Col("sequence", "int"),
+            "Tenant Names": Col("tenant_names"),
+            "Start Date": Col("start_date", "date"),
+            "End Date": Col("end_date", "date"),
+            "Rent": Col("rent", "number"),
+            "Rent Frequency": Col("rent_frequency"),
+            "Deposit": Col("deposit", "number"),
+            "Tenancy Type": Col("tenancy_type"),
+            "Snapshot": Col("snapshot", "json"),
+            "Archived By": Col("archived_by"),
         },
     ),
 

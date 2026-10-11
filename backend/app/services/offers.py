@@ -171,6 +171,10 @@ async def accept_offer(offer_id: str, *, source: str = "manual") -> dict[str, An
     if not prop_ids:
         raise ValueError(f"Offer {offer_id} has no linked property")
     property_id = prop_ids[0]
+    # Every acceptance path (agent, signed offer letter) stops here once a
+    # tenancy agreement is being signed or is live - see tenancies.LOCKED_FROM_STAGE.
+    from app.services.tenancies import ensure_no_tenancy_in_progress  # noqa: PLC0415 — avoid load cycle
+    ensure_no_tenancy_in_progress(property_id, "Accept offer")
 
     at.update(at.TableNames.PROPERTIES, property_id, {
         "Tenant": tenant_ids,

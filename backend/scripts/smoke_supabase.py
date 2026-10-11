@@ -1,7 +1,7 @@
 """End-to-end smoke test of the Supabase data layer against a REAL database.
 
 Drives the actual handlers (PG_01 take-on → gate → PG_03 offer → accept →
-referencing → scheduler → payments → PG_IM import → cascade delete) through the supabase
+referencing → scheduler → payments → PG_IM import → PG_RL re-let → cascade delete) through the supabase
 client, asserting the link symmetry, lookups and Airtable-shape conventions
 the app depends on. Run it whenever the schema or the adapter changes:
 
@@ -67,6 +67,7 @@ async def main() -> None:
     from app.handlers.pg03_offer import handle_offer
     from app.handlers.pg06_scheduler import run_scheduler
     from app.handlers.pg_import import handle_import, was_imported
+    from app.services import tenancies as tn
     from app.models.common import ImportTenancyInput, OfferInput, PropertyTakeonInput
     from app.services.offers import accept_offer, offers_for_property
     from app.services.sent_documents import (
@@ -279,8 +280,52 @@ async def main() -> None:
           f"{gap['blocked_at']} {gap['blockers']}")
     check("import: no financials before Live", not gpf.get("Financials"), str(gpf.get("Financials")))
 
+    # ------------------------------------------------------------ PG_RL re-let
+    # The imported Live tenancy ends and the property is re-let: archived,
+    # cleared back to Offer, property data kept. Exercises the uuid / jsonb
+    # columns and the FK cascade against real Postgres.
+    lid = live["property_id"]
+    old_tenants = list(lpf.get("Tenant") or [])
+    try:
+        tn.ensure_no_tenancy_in_progress(lid, "Record offer")
+        check("relet: offers refused while the tenancy is live", False)
+    except tn.TenancyStateError:
+        check("relet: offers refused while the tenancy is live", True)
+    tn.end_tenancy(lid, date.today(), by="smoke")
+    epf = at.get(at.TableNames.PROPERTIES, lid, fresh=True)["fields"]
+    check("relet: ended tenancy is stage 9", epf.get("Stage_Order") == 9 and bool(epf.get("Tenancy Ended Date")),
+          f"{epf.get('Stage_Order')} {epf.get('Tenancy Ended Date')}")
+    relet = tn.perform_relet(lid, by="smoke")
+    rpf = at.get(at.TableNames.PROPERTIES, lid, fresh=True)["fields"]
+    check("relet: back to Offer (Stage_Order 4)", relet["stage"] == 4 and rpf.get("Stage_Order") == 4,
+          f"{relet['stage']} {rpf.get('Stage_Order')}")
+    check("relet: tenancy fields cleared",
+          not rpf.get("TA_LL_Signed") and not rpf.get("Tenant") and not rpf.get("Deposit Registered")
+          and not rpf.get("How_To_Rent_Served") and bool(rpf.get("Tenancy Cycle Started At")))
+    check("relet: landlord, certificates and T&Cs kept",
+          rpf.get("Landlords") == [live["landlord_id"]] and rpf.get("TC_Signed") is True
+          and rpf.get("Gas_Cert_Status") == "On File")
+    arch = at.search(at.TableNames.TENANCIES, at.eq("Property ID", lid), fresh=True)
+    snap = (arch[0]["fields"].get("Snapshot") or {}) if arch else {}
+    check("relet: archive found by property uuid; jsonb snapshot round-trips",
+          len(arch) == 1 and snap.get("tenant_ids") == old_tenants
+          and snap.get("fields", {}).get("TA_TT_Signed") is True,
+          f"rows={len(arch)} tenants={snap.get('tenant_ids')}")
+    diary = [at.get(at.TableNames.DIARY, d, fresh=True)["fields"] for d in rpf.get("Diary") or []]
+    cancelled = sorted(d["Diary_Type"] for d in diary if d.get("Fired"))
+    kept = sorted(d["Diary_Type"] for d in diary if not d.get("Fired"))
+    check("relet: tenancy alerts cancelled, certificate renewals kept",
+          cancelled == ["Rent Review S13", "TDS 30-Day Countdown"]
+          and kept == ["EICR Renewal", "Gas Cert Renewal"], f"cancelled={cancelled} kept={kept}")
+    tn.ensure_no_tenancy_in_progress(lid, "Record offer")
+    check("relet: offers open again", True)
+
     for imported in (live, gap):
         delete_property_tree(imported["property_id"], imported["landlord_id"])
+    for tid in old_tenants:          # unlinked from the property by the re-let
+        at.delete(at.TableNames.TENANTS, tid)
+    check("relet: archive removed with its property (FK cascade)",
+          at.search(at.TableNames.TENANCIES, at.eq("Property ID", lid), fresh=True) == [])
     try:
         at.get(at.TableNames.PROPERTIES, live["property_id"], fresh=True)
         check("import: rows removed", False)

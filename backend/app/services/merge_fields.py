@@ -44,12 +44,19 @@ def _resolve_tenant(pf: dict) -> dict:
     """The property's tenant, or the latest offer's lead tenant pre-acceptance."""
     tid = _first(pf.get("Tenant"))
     if not tid:
+        # Only this tenancy's offers: after a re-let the previous tenancy's
+        # offers are still linked to the property but name the old tenants.
+        from app.services.tenancies import belongs_to_previous_tenancy, cycle_started_at  # noqa: PLC0415
+        cycle = cycle_started_at(pf)
         latest: dict | None = None
         for oid in pf.get("Offers") or []:
             try:
-                of = at.get(at.TableNames.OFFERS, oid).get("fields", {})
+                offer = at.get(at.TableNames.OFFERS, oid)
             except Exception:
                 continue
+            if belongs_to_previous_tenancy(offer.get("createdTime"), cycle):
+                continue
+            of = offer.get("fields", {})
             if latest is None or (of.get("Created At") or "") > (latest.get("Created At") or ""):
                 latest = of
         if latest:

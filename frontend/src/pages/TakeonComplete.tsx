@@ -5,6 +5,7 @@ import { api } from "../lib/api";
 
 type TakeonStatus = {
   payment_id: string;
+  kind?: "takeon" | "relet";
   status: "pending" | "succeeded" | "cancelled" | "failed" | string;
   fulfilled: boolean;
   property_id: string | null;
@@ -12,15 +13,17 @@ type TakeonStatus = {
   fulfillment_error?: string | null;
 };
 
-/** Landing page after Stripe Checkout for a pay-first take-on.
+/** Landing page after Stripe Checkout for a pay-first take-on or re-let.
  *
- * Polls the intent status: the property is created by whichever of the Stripe
+ * Polls the intent status: the tenancy is set up by whichever of the Stripe
  * webhook / this poller confirms payment first (exactly-once server-side).
- * On fulfillment → straight to the new property page.
+ * On fulfillment → straight to the property page.
  */
 export default function TakeonComplete() {
   const [params] = useSearchParams();
   const paymentId = params.get("payment");
+  // Re-let: the property already exists; the fee archives the ended tenancy.
+  const relet = params.get("kind") === "relet";
   const nav = useNavigate();
   const [state, setState] = useState<TakeonStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -76,8 +79,9 @@ export default function TakeonComplete() {
             <div className="mx-auto h-12 w-12 rounded-full border-4 border-cream-300 border-t-navy-700 animate-spin" />
             <h1 className="font-serif text-2xl text-navy-700">Confirming your payment…</h1>
             <p className="text-sm text-ink-soft">
-              Stripe has your £50 tenancy fee. We're creating the property and
-              notifying the landlord — this takes a few seconds. Don't close this tab.
+              {relet
+                ? "Stripe has your £50 tenancy fee. We're archiving the previous tenancy and opening the property for new offers — this takes a few seconds. Don't close this tab."
+                : "Stripe has your £50 tenancy fee. We're creating the property and notifying the landlord — this takes a few seconds. Don't close this tab."}
             </p>
             {tries.current > 12 && (
               <p className="text-xs text-ink-muted">
@@ -92,9 +96,13 @@ export default function TakeonComplete() {
           <>
             <h1 className="font-serif text-2xl text-navy-700">Payment not completed</h1>
             <p className="text-sm text-ink-soft">
-              The checkout was {state?.status}. No property was created and nothing was charged.
+              {relet
+                ? <>The checkout was {state?.status}. Nothing was changed and nothing was charged — the tenancy is still ended.</>
+                : <>The checkout was {state?.status}. No property was created and nothing was charged.</>}
             </p>
-            <Link to="/agent/properties/new" className="btn-primary inline-block">Start again</Link>
+            {relet && state?.property_id
+              ? <Link to={`/agent/properties/${state.property_id}?stage=9`} className="btn-primary inline-block">Back to the property</Link>
+              : <Link to="/agent/properties/new" className="btn-primary inline-block">Start again</Link>}
           </>
         )}
 
@@ -102,9 +110,15 @@ export default function TakeonComplete() {
           <>
             <h1 className="font-serif text-2xl text-navy-700">Payment received — setup hit a snag</h1>
             <p className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded px-3 py-2">
-              Your £50 was charged but creating the property failed: {fulfillError}.
-              Contact support with payment reference <code>{paymentId}</code> — nothing is lost.
+              {relet
+                ? <>Your £50 was charged but the re-let failed: {fulfillError}. Use Re-let on the property
+                    again — you won't be charged twice. Payment reference <code>{paymentId}</code>.</>
+                : <>Your £50 was charged but creating the property failed: {fulfillError}.
+                    Contact support with payment reference <code>{paymentId}</code> — nothing is lost.</>}
             </p>
+            {relet && state?.property_id && (
+              <Link to={`/agent/properties/${state.property_id}?stage=9`} className="btn-primary inline-block">Back to the property</Link>
+            )}
           </>
         )}
 

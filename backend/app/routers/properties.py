@@ -590,31 +590,9 @@ _STAGE_NAMES = {
 
 
 def _derive_stage_order_from_fields(f: dict) -> int:
-    """Stage derivation from a Property fields dict.
-
-    Keep in sync with the frontend [stages.ts:deriveCurrentStage] and the
-    backend [forms.py:_derive_current_stage_for_check] — same priorities,
-
-    most-advanced-state first. Inlined here to keep the dashboard list
-    endpoint a single Airtable read per page load.
-    """
-    if f.get("TA_LL_Signed") and f.get("TA_TT_Signed"):
-        return 8
-    tenant_linked = bool(f.get("Tenant"))
-    if tenant_linked and (f.get("TA_LL_Signed") or f.get("TA_TT_Signed")):
-        return 7
-    if tenant_linked and f.get("LL_Offer_Accepted"):
-        return 6
-    if tenant_linked:
-        return 5
-    if f.get("TC_Signed"):
-        return 4
-    cert_keys = ("Gas_Cert_Status", "EPC_Status", "EICR_Status")
-    if all(f.get(k) in ("On File", "Agency Arranging") for k in cert_keys):
-        return 3
-    if bool(f.get("Landlords")) and any(f.get(k) for k in cert_keys):
-        return 2
-    return 1
+    """Stage from a Property fields dict - see ``app.services.stages``."""
+    from app.services.stages import derive_stage  # noqa: PLC0415 — keep router imports slim
+    return derive_stage(f)
 
 
 def _to_summary(record: dict) -> dict:
@@ -669,3 +647,70 @@ def property_diary(property_id: str, _: Agent = Depends(require_agent)) -> dict:
             pass
     rows.sort(key=lambda r: r.get("alert_date") or "9999-12-31")
     return {"property_id": property_id, "entries": rows}
+
+
+# ---------------------------------------------------------------------------
+# Tenancy cycles (PG_RL): end a tenancy, take that back, re-let, history.
+# The rules live in app.services.tenancies; these map them onto HTTP.
+# ---------------------------------------------------------------------------
+from datetime import date as _Date  # noqa: E402 - keep near its use site
+
+from pydantic import BaseModel  # noqa: E402
+
+
+class EndTenancyBody(BaseModel):
+    end_date: _Date
+
+
+def _tenancy_call(fn, *args, **kwargs):
+    from app.services.tenancies import TenancyStateError  # noqa: PLC0415
+    try:
+        return fn(*args, **kwargs)
+    except TenancyStateError as e:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(e))
+    except KeyError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Property not found")
+
+
+@router.post("/{property_id}/end-tenancy")
+def end_tenancy(property_id: str, body: EndTenancyBody, agent: Agent = Depends(require_agent)) -> dict[str, Any]:
+    """Record that the live tenancy has ended (stage 8 -> 9)."""
+    from app.services import tenancies  # noqa: PLC0415
+    return _tenancy_call(tenancies.end_tenancy, property_id, body.end_date, by=agent.email)
+
+
+@router.post("/{property_id}/reopen-tenancy")
+def reopen_tenancy(property_id: str, agent: Agent = Depends(require_agent)) -> dict[str, Any]:
+    """Undo "End tenancy" while the property hasn't been re-let (stage 9 -> 8)."""
+    from app.services import tenancies  # noqa: PLC0415
+    return _tenancy_call(tenancies.reopen_tenancy, property_id, by=agent.email)
+
+
+@router.post("/{property_id}/relet")
+async def relet(property_id: str, agent: Agent = Depends(require_agent)) -> dict[str, Any]:
+    """Start the next tenancy on this property (stage 9 -> Offer).
+
+    A re-let is a new tenancy: with billing on this returns the tenancy-fee
+    checkout and the re-let happens once it clears; with billing off it
+    happens now. Never charges twice for the same re-let.
+    """
+    from app.services import billing, tenancies  # noqa: PLC0415
+    try:
+        return await tenancies.start_relet(property_id, by=agent.email)
+    except tenancies.TenancyStateError as e:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(e))
+    except billing.BillingUnavailable as e:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(e))
+    except KeyError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Property not found")
+
+
+@router.get("/{property_id}/tenancies")
+def tenancy_history(property_id: str, _: Agent = Depends(require_agent)) -> dict[str, Any]:
+    """Archived tenancies, newest first, each with the documents sent during it."""
+    from app.services import tenancies  # noqa: PLC0415
+    try:
+        at.get(at.TableNames.PROPERTIES, property_id)
+    except Exception:  # noqa: BLE001
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Property not found")
+    return {"property_id": property_id, "tenancies": tenancies.history(property_id)}

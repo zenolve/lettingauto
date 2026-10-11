@@ -151,6 +151,7 @@ async def _handle_event(payload: dict[str, Any], prop: dict | None) -> dict:
     # superseded. Falls back to the legacy LL_Offer_Accepted flag if no Offer
     # row exists (pre-Gap-5 data).
     if kind == "OFFER":
+        from app.services.tenancies import TenancyStateError  # noqa: PLC0415
         try:
             from app.services.offers import (  # noqa: PLC0415
                 accept_offer, find_offer_by_envelope, offers_for_property,
@@ -174,6 +175,12 @@ async def _handle_event(payload: dict[str, Any], prop: dict | None) -> dict:
                 )
                 return {"property_id": property_id, "kind": kind,
                         "offer_accepted": offer["id"], "gate": res.get("gate")}
+        except TenancyStateError as e:
+            # A landlord signed an old offer letter after another tenancy was
+            # signed or went live. Don't fall back to the legacy flag-set: that
+            # would mark the offer accepted on top of the current tenancy.
+            logger.warning("docuseal.offer_accept_refused property=%s err=%s", property_id, e)
+            return {"ignored": True, "reason": "tenancy_in_progress", "property_id": property_id}
         except Exception as e:  # noqa: BLE001
             logger.warning("docuseal.offer_accept_failed err=%s — falling back", e)
         # fall through to legacy flag-set below if no offer row / on error

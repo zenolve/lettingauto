@@ -45,9 +45,23 @@ def _to_summary(rec: dict) -> dict:
 
 
 @router.get("/api/properties/{property_id}/offers")
-def list_offers(property_id: str, _: Agent = Depends(require_agent)) -> dict[str, Any]:
-    rows = offers_svc.offers_for_property(property_id)
-    return {"property_id": property_id, "offers": [_to_summary(r) for r in rows]}
+def list_offers(
+    property_id: str, include_previous: bool = False, _: Agent = Depends(require_agent),
+) -> dict[str, Any]:
+    """The current tenancy's offers. Offers made for a tenancy that has since
+    been archived by a re-let are left out unless ``include_previous``."""
+    from app.services.tenancies import belongs_to_previous_tenancy, cycle_started_at  # noqa: PLC0415
+    try:
+        cycle = cycle_started_at(at.get(at.TableNames.PROPERTIES, property_id).get("fields", {}))
+    except Exception:  # noqa: BLE001
+        cycle = None
+    offers = []
+    for r in offers_svc.offers_for_property(property_id):
+        previous = belongs_to_previous_tenancy(r.get("createdTime"), cycle)
+        if previous and not include_previous:
+            continue
+        offers.append({**_to_summary(r), "previous_tenancy": previous})
+    return {"property_id": property_id, "offers": offers}
 
 
 def _load_offer_or_404(offer_id: str) -> dict:
@@ -65,7 +79,11 @@ async def accept(offer_id: str, _: Agent = Depends(require_agent)) -> dict[str, 
             status.HTTP_409_CONFLICT,
             f"Only a Pending offer can be accepted (this one is {of.get('Status')}).",
         )
-    return await offers_svc.accept_offer(offer_id, source="agent")
+    from app.services.tenancies import TenancyStateError  # noqa: PLC0415
+    try:
+        return await offers_svc.accept_offer(offer_id, source="agent")
+    except TenancyStateError as e:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(e))
 
 
 class CloseBody(BaseModel):

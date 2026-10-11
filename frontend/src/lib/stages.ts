@@ -57,8 +57,11 @@ export function deriveCurrentStage(property: PropertyDetail): number {
   const f = property.fields ?? {};
   const tenant = property.tenant ?? null;
 
-  // End of tenancy — explicit notice fields would go here later
-  // (Currently no field captures "notice served"; will wire when implemented.)
+  // End of tenancy — the agent recorded the end date ("End tenancy"). A re-let
+  // clears it with the rest of the tenancy. Mirrors backend services/stages.py.
+  if (f["Tenancy Ended Date"]) {
+    return 9;
+  }
 
   // Live tenancy — TA signed by both parties
   if (f["TA_LL_Signed"] && f["TA_TT_Signed"]) {

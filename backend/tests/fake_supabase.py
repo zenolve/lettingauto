@@ -43,8 +43,16 @@ class FakeSupabase:
 
     # -- wiring ---------------------------------------------------------------
     def install(self, monkeypatch) -> None:
-        for name in ("create", "get", "update", "delete", "search", "find_first", "all_records"):
+        for name in ("create", "get", "update", "delete", "search", "find_first", "all_records",
+                     "try_transition"):
             monkeypatch.setattr(at, name, getattr(self, name))
+
+        # Anything that still reaches for a real connection is an adapter call
+        # this fake doesn't cover - fail loudly instead of quietly running SQL
+        # against whatever SUPABASE_DB_URL points at.
+        def _no_database():
+            raise RuntimeError("tests using fake_db must not open a database connection")
+        monkeypatch.setattr(at, "_get_pool", _no_database)
 
     def seed_stages(self, count: int = 9) -> None:
         for n in range(1, count + 1):
@@ -61,6 +69,12 @@ class FakeSupabase:
 
     def link_count(self) -> int:
         return sum(len(v) for v in self._junctions.values())
+
+    def backdate(self, record_id: str, when: datetime) -> None:
+        """Move a row's createdTime - for "made before the re-let" without
+        relying on the clock (Windows ticks ~15 ms, so neighbours can tie)."""
+        assert record_id in self._created, record_id
+        self._created[record_id] = when
 
     # -- adapter surface ----------------------------------------------------------
     def create(self, name: str, fields: dict) -> dict:
@@ -96,6 +110,17 @@ class FakeSupabase:
         for junction, jrows in self._junctions.items():
             self._junctions[junction] = [r for r in jrows if record_id not in r.values()]
         return {"id": record_id, "deleted": True}
+
+    def try_transition(self, name: str, record_id: str, field: str, from_value: Any, to_value: Any) -> bool:
+        """Compare-and-set on one scalar, as the adapter's exactly-once guard."""
+        col = _schema(name).columns.get(field)
+        if col is None:
+            raise KeyError(f"UNKNOWN_FIELD_NAME: {field!r} is not a field on table {name!r}")
+        row = self._rows.get(name, {}).get(record_id)
+        if row is None or row.get(col.name) != from_value:
+            return False
+        row[col.name] = to_value
+        return True
 
     def search(
         self, name: str, formula: Cond, max_records: int | None = None, *, fresh: bool = False,

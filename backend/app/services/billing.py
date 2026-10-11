@@ -1,7 +1,8 @@
 """Agency billing — Stripe (one-time £50 per new tenancy).
 
-Pricing: a single £50 one-time fee each time an agency starts a new tenancy
-(at property take-on, PG_01). No subscriptions, no card-on-file.
+Pricing: a single £50 one-time fee each time an agency starts a new tenancy -
+at property take-on (PG_01), or when re-letting a property whose previous
+tenancy has ended (PG_RL). No subscriptions, no card-on-file.
 
 Flow:
   1. Take-on creates the property, then ``start_tenancy_checkout`` creates a
@@ -65,6 +66,36 @@ def ensure_customer(agency_id: str) -> str:
     return customer["id"]
 
 
+def _open_checkout(
+    agency_id: str, payment_id: str, *, description: str, success_url: str, cancel_url: str, kind: str,
+) -> tuple[Any, str]:
+    """One-time tenancy-fee Checkout Session for a pending payments row.
+
+    The payment-row id is both ``client_reference_id`` and
+    ``metadata.payment_id`` so the webhook can match it either way.
+    Returns ``(session, customer_id)``.
+    """
+    stripe = _stripe()
+    customer_id = ensure_customer(agency_id)
+    session = stripe.checkout.Session.create(
+        mode="payment",
+        customer=customer_id,
+        line_items=[{
+            "price_data": {
+                "currency": settings.stripe_currency,
+                "product_data": {"name": description},
+                "unit_amount": settings.stripe_tenancy_setup_fee_pence,
+            },
+            "quantity": 1,
+        }],
+        success_url=success_url,
+        cancel_url=cancel_url,
+        client_reference_id=payment_id,
+        metadata={"payment_id": payment_id, "agency_id": agency_id, "kind": kind},
+    )
+    return session, customer_id
+
+
 # ---------------------------------------------------------------------------
 # Pay-first take-on (deferred fulfillment)
 #
@@ -100,26 +131,13 @@ def create_takeon_intent(agency_id: str, payload: dict) -> Optional[dict]:
         "metadata": {"takeon_payload": payload},
     })
 
-    stripe = _stripe()
     base = settings.frontend_base_url.rstrip("/")
     try:
-        customer_id = ensure_customer(agency_id)
-        session = stripe.checkout.Session.create(
-            mode="payment",
-            customer=customer_id,
-            line_items=[{
-                "price_data": {
-                    "currency": settings.stripe_currency,
-                    "product_data": {"name": description},
-                    "unit_amount": fee,
-                },
-                "quantity": 1,
-            }],
+        session, customer_id = _open_checkout(
+            agency_id, payment["id"], description=description,
             success_url=f"{base}/agent/takeon/complete?payment={payment['id']}",
             cancel_url=f"{base}/agent/properties/new?payment=cancelled&payment_id={payment['id']}",
-            client_reference_id=payment["id"],
-            metadata={"payment_id": payment["id"], "agency_id": agency_id,
-                      "kind": "tenancy_setup"},
+            kind="tenancy_setup",
         )
     except Exception as e:  # noqa: BLE001
         at.update(at.TableNames.PAYMENTS, payment["id"],
@@ -147,6 +165,9 @@ async def mark_paid_and_fulfill(payment: dict) -> Optional[str]:
     ``handle_takeon``. Returns the property_id (winner), the already-linked
     property_id (loser/late call), or None if the row wasn't pending.
     """
+    if (payment.get("fields", {}).get("metadata") or {}).get("relet"):
+        return await _fulfil_relet_intent(payment)
+
     pid = payment["id"]
     f = payment.get("fields", {})
     existing = f.get("property_id")
@@ -188,6 +209,121 @@ async def mark_paid_and_fulfill(payment: dict) -> Optional[str]:
         except Exception:  # noqa: BLE001
             pass
         return None
+    finally:
+        at.reset_agency_scope(scope)
+
+
+# ---------------------------------------------------------------------------
+# Pay-first re-let (PG_RL) - a new tenancy on a property whose last one ended
+#
+# Same pattern as take-on, one difference: the property already exists, so the
+# payment row carries ``property_id`` from the start (it lists on the
+# property's payments) and fulfilment is marked by ``metadata.relet.tenancy_id``.
+# ---------------------------------------------------------------------------
+def create_relet_intent(agency_id: str, property_id: str, address: str, *, requested_by: str) -> dict:
+    """Open the tenancy-fee checkout for re-letting. Raises on Stripe failure."""
+    fee = settings.stripe_tenancy_setup_fee_pence
+    description = (f"New tenancy setup fee (re-let) — {address}").strip(" —") or "New tenancy setup fee (re-let)"
+    relet = {"property_id": property_id, "requested_by": requested_by}
+    payment = at.create(at.TableNames.PAYMENTS, {
+        "payment_type": "tenancy_setup_fee",
+        "amount": fee / 100.0,
+        "currency": settings.stripe_currency,
+        "status": "pending",
+        "description": description,
+        "property_id": property_id,
+        "metadata": {"relet": relet},
+    })
+    base = settings.frontend_base_url.rstrip("/")
+    try:
+        session, customer_id = _open_checkout(
+            agency_id, payment["id"], description=description,
+            success_url=f"{base}/agent/takeon/complete?payment={payment['id']}&kind=relet",
+            cancel_url=f"{base}/agent/properties/{property_id}?stage=9&payment=cancelled",
+            kind="tenancy_relet",
+        )
+    except Exception as e:  # noqa: BLE001
+        at.update(at.TableNames.PAYMENTS, payment["id"],
+                  {"status": "failed", "description": f"{description} (Stripe error: {e})"})
+        logger.error("billing.relet_intent_failed agency=%s property=%s err=%s", agency_id, property_id, e)
+        raise BillingUnavailable(f"Could not start the Stripe checkout: {e}") from e
+
+    at.update(at.TableNames.PAYMENTS, payment["id"], {
+        "stripe_checkout_session_id": session["id"],
+        "stripe_customer_id": customer_id,
+        "metadata": {"relet": relet, "checkout_url": session["url"]},
+    })
+    logger.info("billing.relet_intent agency=%s property=%s payment=%s", agency_id, property_id, payment["id"])
+    return {"payment_id": payment["id"], "checkout_url": session["url"]}
+
+
+def relet_payments(property_id: str) -> tuple[Optional[dict], Optional[dict]]:
+    """This property's re-let fees: (the latest open checkout, a fee that was
+    paid but whose re-let hasn't completed). Either may be None."""
+    rows = at.search(at.TableNames.PAYMENTS, at.eq("property_id", property_id), fresh=True)
+    relets = [r for r in rows if (r.get("fields", {}).get("metadata") or {}).get("relet")]
+    relets.sort(key=lambda r: r.get("createdTime") or "", reverse=True)
+    open_pay = next((r for r in relets if r["fields"].get("status") == "pending"), None)
+    paid = next((r for r in relets if r["fields"].get("status") == "succeeded"
+                 and not r["fields"]["metadata"]["relet"].get("tenancy_id")), None)
+    return open_pay, paid
+
+
+def checkout_state(payment: dict) -> str:
+    """'paid' | 'open' | 'expired' | 'unknown' for an intent's Checkout Session."""
+    sid = payment.get("fields", {}).get("stripe_checkout_session_id")
+    if not (billing_enabled() and sid):
+        return "unknown"
+    try:
+        session = _stripe().checkout.Session.retrieve(sid)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("billing.checkout_state_failed payment=%s err=%s", payment.get("id"), e)
+        return "unknown"
+    if session.get("payment_status") == "paid":
+        return "paid"
+    return "open" if session.get("status") == "open" else "expired"
+
+
+async def _fulfil_relet_intent(payment: dict) -> Optional[str]:
+    """Exactly-once fulfilment of a paid re-let intent (webhook + poller race)."""
+    relet = (payment.get("fields", {}).get("metadata") or {}).get("relet") or {}
+    property_id = relet.get("property_id")
+    if relet.get("tenancy_id"):
+        return property_id
+    if not at.try_transition(at.TableNames.PAYMENTS, payment["id"], "status", "pending", "succeeded"):
+        return property_id            # the other path won and is fulfilling
+    return property_id if await fulfil_relet(payment) else None
+
+
+async def fulfil_relet(payment: dict) -> Optional[dict]:
+    """Run the re-let a paid fee bought; record the outcome on the payment.
+
+    Also the retry path: a fee that was paid but whose re-let failed is
+    fulfilled again here without charging again.
+    """
+    from app.services.tenancies import perform_relet  # noqa: PLC0415 — avoid load cycle
+
+    f = payment.get("fields", {})
+    meta = dict(f.get("metadata") or {})
+    relet = dict(meta.get("relet") or {})
+    scope = at.set_agency_scope(f.get("agency_id"))
+    try:
+        result = perform_relet(relet["property_id"], by=relet.get("requested_by") or "agent")
+    except Exception as e:  # noqa: BLE001 — money taken but re-let failed: keep it findable
+        logger.error("billing.relet_fulfil_failed payment=%s err=%s", payment["id"], e)
+        meta["fulfillment_error"] = str(e)[:300]
+        try:
+            at.update(at.TableNames.PAYMENTS, payment["id"], {"metadata": meta})
+        except Exception:  # noqa: BLE001
+            pass
+        return None
+    else:
+        meta["relet"] = {**relet, "tenancy_id": result["tenancy_id"]}
+        meta.pop("fulfillment_error", None)
+        at.update(at.TableNames.PAYMENTS, payment["id"], {"metadata": meta})
+        logger.info("billing.relet_fulfilled payment=%s property=%s tenancy=%s",
+                    payment["id"], relet["property_id"], result["tenancy_id"])
+        return result
     finally:
         at.reset_agency_scope(scope)
 

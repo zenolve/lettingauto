@@ -208,11 +208,12 @@ async def stripe_webhook(
                    or _find_payment_by_id(obj.get("client_reference_id") or meta.get("payment_id")))
         if payment:
             pf = payment.get("fields", {})
-            is_takeon_intent = bool((pf.get("metadata") or {}).get("takeon_payload"))
-            if is_takeon_intent and obj.get("payment_status") == "paid":
-                # Pay-first take-on: this payment *bought* a property that
-                # doesn't exist yet — fulfil it now (CAS makes this safe
-                # against the success-page poller doing the same).
+            pmeta = pf.get("metadata") or {}
+            is_intent = bool(pmeta.get("takeon_payload") or pmeta.get("relet"))
+            if is_intent and obj.get("payment_status") == "paid":
+                # Pay-first take-on / re-let: this payment *bought* a tenancy
+                # that hasn't been set up yet — fulfil it now (CAS makes this
+                # safe against the success-page poller doing the same).
                 from app.services import billing  # noqa: PLC0415 — avoid load cycle
                 await billing.mark_paid_and_fulfill(payment)
                 at.update(at.TableNames.PAYMENTS, payment["id"], {

@@ -12,6 +12,7 @@ import { StagePipeline } from "../components/ui/StagePipeline";
 import { OffersPanel } from "../components/ui/OffersPanel";
 import { TenancyChecklist } from "../components/ui/TenancyChecklist";
 import { WarningsRecap } from "../components/ui/WarningsRecap";
+import { useAgency } from "../lib/agency";
 import { api, PropertyDetail as PD } from "../lib/api";
 import { groupVersions, sentWhen } from "../lib/sentVersions";
 import { deriveCurrentStage, resolveViewStage, stageByOrder } from "../lib/stages";
@@ -104,6 +105,8 @@ export default function PropertyDetail() {
       <DocumentsSentOnStage propertyId={id} stage={viewing} />
 
       {renderStage(viewing, id, data, current, refresh)}
+
+      <PreviousTenancies propertyId={id} refreshKey={current} />
 
       <DangerZone propertyId={id} address={f["Address"]} />
     </div>
@@ -275,7 +278,7 @@ function renderStage(stage: number, id: string, data: PD, current: number, refre
     case 6: return <Stage6TASigning id={id} data={data} refresh={refresh} />;
     case 7: return <Stage7PreMovein id={id} data={data} current={current} refresh={refresh} />;
     case 8: return <Stage8Live id={id} data={data} refresh={refresh} />;
-    case 9: return <Stage9End id={id} data={data} />;
+    case 9: return <Stage9End id={id} data={data} current={current} refresh={refresh} />;
     default: return null;
   }
 }
@@ -657,13 +660,165 @@ function Stage8Live({ id, data, refresh }: { id: string; data: PD; refresh: () =
         </p>
         <BrowseLibrary propertyId={id} stage={8} />
       </section>
+      <EndTenancyCard id={id} refresh={refresh} />
     </div>
   );
 }
 
-function Stage9End({ id }: { id: string; data: PD }) {
+function fmtDay(iso?: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
+
+/** Stage 8 → 9. Nothing about the tenancy is cleared until the property is re-let. */
+function EndTenancyCard({ id, refresh }: { id: string; refresh: () => void }) {
+  const confirm = useConfirm();
+  const nav = useNavigate();
+  const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function end() {
+    const ok = await confirm({
+      title: `End this tenancy on ${fmtDay(endDate)}?`,
+      tone: "warning",
+      confirmLabel: "End tenancy",
+      cancelLabel: "Not yet",
+      body: (
+        <p>
+          The property moves to End of Tenancy for check-out and the deposit. Nothing about the
+          tenancy is cleared until you re-let the property, and you can undo this until then.
+        </p>
+      ),
+    });
+    if (!ok) return;
+    setBusy(true); setErr(null);
+    try {
+      await api.post(`/api/properties/${id}/end-tenancy`, { end_date: endDate });
+      nav(`/agent/properties/${id}`, { replace: true });
+      refresh();
+    } catch (e: any) {
+      setErr(e?.response?.data?.detail ?? "Could not end the tenancy");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="card p-5 md:col-span-2">
+      <h3 className="font-serif text-base font-semibold text-navy-700">End this tenancy</h3>
+      <p className="text-sm text-ink-soft mt-1">
+        When the tenant moves out, record the date. You can then re-let the property without
+        re-entering the landlord; this tenancy is kept under Previous tenancies.
+      </p>
+      <div className="flex flex-wrap items-end gap-2 mt-3">
+        <label className="block">
+          <span className="text-xs text-ink-soft">Tenancy ended on</span>
+          <input type="date" className="input text-sm mt-1" value={endDate}
+                 onChange={(e) => setEndDate(e.target.value)} />
+        </label>
+        <button className="btn-secondary" onClick={end} disabled={busy || !endDate}>
+          {busy ? "Ending…" : "End tenancy"}
+        </button>
+      </div>
+      {err && <p className="text-xs text-rose-700 mt-2">{err}</p>}
+    </section>
+  );
+}
+
+/** Stage 9: the ended tenancy, with undo and the re-let (a new, pay-first tenancy). */
+function TenancyEndedCard({ id, endedOn, refresh }: { id: string; endedOn: string; refresh: () => void }) {
+  const confirm = useConfirm();
+  const nav = useNavigate();
+  const [search] = useSearchParams();
+  const billing = useAgency((s) => s.agency?.billing);
+  const [busy, setBusy] = useState<"relet" | "undo" | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const fee = billing?.pricing?.tenancy_setup_fee ?? 50;
+  const charged = billing?.enabled ?? true;
+
+  async function relet() {
+    const ok = await confirm({
+      title: "Re-let this property?",
+      tone: "info",
+      confirmLabel: charged ? `Pay £${fee} and re-let` : "Re-let now",
+      cancelLabel: "Not yet",
+      body: (
+        <div className="space-y-2">
+          <p>
+            This tenancy is archived — tenants, dates, rent, deposit and its documents stay under
+            Previous tenancies — and the property opens for new offers. The landlord, certificates
+            and signed terms of business carry over.
+          </p>
+          <p>
+            {charged
+              ? `A re-let is a new tenancy: £${fee}, paid by card first. Nothing changes until it clears.`
+              : "Billing is off in this environment, so this happens straight away."}
+          </p>
+        </div>
+      ),
+    });
+    if (!ok) return;
+    setBusy("relet"); setErr(null);
+    try {
+      const { data } = await api.post(`/api/properties/${id}/relet`);
+      if (data.payment_required && data.checkout_url) {
+        window.location.assign(data.checkout_url);
+        return;
+      }
+      nav(`/agent/properties/${id}`, { replace: true });
+      refresh();
+    } catch (e: any) {
+      setErr(e?.response?.data?.detail ?? "Could not re-let the property");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function undo() {
+    setBusy("undo"); setErr(null);
+    try {
+      await api.post(`/api/properties/${id}/reopen-tenancy`);
+      nav(`/agent/properties/${id}`, { replace: true });
+      refresh();
+    } catch (e: any) {
+      setErr(e?.response?.data?.detail ?? "Could not reopen the tenancy");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <section className="card p-5 md:col-span-2 border-l-4 border-l-navy-400">
+      <h3 className="font-serif text-base font-semibold text-navy-700">Tenancy ended {fmtDay(endedOn)}</h3>
+      <p className="text-sm text-ink-soft mt-1">
+        Finish check-out and the deposit below, then re-let to start the next tenancy at the Offer
+        stage — no need to add the property or landlord again.
+      </p>
+      {search.get("payment") === "cancelled" && (
+        <p className="text-xs mt-2 px-2 py-1.5 rounded bg-cream-100 text-ink-soft border border-cream-300">
+          The payment wasn't completed, so nothing was changed.
+        </p>
+      )}
+      <div className="flex flex-wrap gap-2 mt-3">
+        <button className="btn-primary" onClick={relet} disabled={busy !== null}>
+          {busy === "relet" ? "Starting…" : charged ? `Re-let this property · £${fee}` : "Re-let this property"}
+        </button>
+        <button className="btn-ghost text-sm" onClick={undo} disabled={busy !== null}>
+          {busy === "undo" ? "Reopening…" : "Undo — the tenancy hasn't ended"}
+        </button>
+      </div>
+      {err && <p className="text-xs text-rose-700 mt-2">{err}</p>}
+    </section>
+  );
+}
+
+function Stage9End({ id, data, current, refresh }: { id: string; data: PD; current: number; refresh: () => void }) {
+  const endedOn = data.fields["Tenancy Ended Date"];
   return (
     <div className="grid md:grid-cols-2 gap-6">
+      {current === 9 && endedOn && <TenancyEndedCard id={id} endedOn={endedOn} refresh={refresh} />}
       <section className="card p-5 md:col-span-2">
         <h3 className="text-sm uppercase tracking-wide text-slate-500 mb-3">End-of-tenancy correspondence</h3>
         <p className="text-sm text-slate-600 mb-3">
@@ -700,6 +855,8 @@ type SentDoc = {
   envelope_open?: boolean;
   /** A library document the agent can open again as a revision. */
   revisable?: boolean;
+  /** Sent during a tenancy a re-let has archived - listed under Previous tenancies. */
+  previous_tenancy?: boolean;
 };
 
 function SentStatusBadge({ status }: { status?: string }) {
@@ -802,7 +959,7 @@ function DocumentsSentOnStage({ propertyId, stage }: { propertyId: string; stage
       .then((r) => setRows(r.data.sent))
       .catch(() => setRows([]));
   }, [propertyId, stage]);
-  const onStage = rows.filter((r) => r.stage === stage);
+  const onStage = rows.filter((r) => r.stage === stage && !r.previous_tenancy);
   if (onStage.length === 0) return null;
   // One entry per document: its current version, with the versions it replaced underneath.
   const chains = groupVersions(onStage);
@@ -1082,4 +1239,78 @@ function bool(v: any): string {
   if (v === true) return "Yes";
   if (v === false || v === undefined || v === null) return "No";
   return String(v);
+}
+
+// ---------------------------------------------------------------------------
+// Previous tenancies — archived by a re-let, each with the documents sent
+// during it. Hidden until the property has been re-let at least once.
+// ---------------------------------------------------------------------------
+type ArchivedTenancy = {
+  id: string;
+  sequence: number;
+  tenant_names?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  rent?: number | null;
+  rent_frequency?: string | null;
+  deposit?: number | null;
+  tenancy_type?: string | null;
+  documents: SentDoc[];
+};
+
+function PreviousTenancies({ propertyId, refreshKey }: { propertyId: string; refreshKey: number }) {
+  const [rows, setRows] = useState<ArchivedTenancy[]>([]);
+  useEffect(() => {
+    api.get<{ tenancies: ArchivedTenancy[] }>(`/api/properties/${propertyId}/tenancies`)
+      .then((r) => setRows(r.data.tenancies))
+      .catch(() => setRows([]));
+  }, [propertyId, refreshKey]);
+  if (rows.length === 0) return null;
+  return (
+    <section className="card p-5">
+      <h3 className="font-serif text-base font-semibold text-navy-700">Previous tenancies</h3>
+      <p className="text-xs text-ink-muted mt-1">
+        Archived when the property was re-let, each with the documents sent during it.
+      </p>
+      <ul className="mt-3 divide-y divide-cream-300">
+        {rows.map((t) => (
+          <li key={t.id} className="py-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <span className="font-medium text-slate-800">
+                Tenancy {t.sequence}{t.tenant_names ? ` · ${t.tenant_names}` : ""}
+              </span>
+              <span className="text-xs text-slate-500">{fmtDay(t.start_date)} – {fmtDay(t.end_date)}</span>
+            </div>
+            <div className="text-xs text-slate-500 mt-0.5">
+              {t.rent != null && <>£{Number(t.rent).toLocaleString()} {t.rent_frequency?.toLowerCase()}</>}
+              {t.deposit != null && <> · deposit £{Number(t.deposit).toLocaleString()}</>}
+              {t.tenancy_type && <> · {t.tenancy_type}</>}
+            </div>
+            {t.documents.length > 0 && (
+              <details className="mt-1.5">
+                <summary className="text-xs text-ink-muted cursor-pointer select-none">
+                  {t.documents.length} document{t.documents.length === 1 ? "" : "s"} sent
+                </summary>
+                <ul className="mt-1 space-y-1 border-l border-cream-300 pl-3">
+                  {t.documents.map((d) => (
+                    <li key={d.submission_id} className="flex items-center justify-between gap-3 text-xs text-slate-500">
+                      <span className="min-w-0 truncate">
+                        {d.doc_name}{(d.version ?? 1) > 1 ? ` · v${d.version}` : ""} · {sentWhen(d)}
+                        {d.status && d.status !== "Sent" ? ` · ${d.status.toLowerCase()}` : ""}
+                      </span>
+                      {d.pdf_url ? (
+                        <a href={d.pdf_url} target="_blank" rel="noreferrer" className="text-navy-700 hover:underline shrink-0">View PDF</a>
+                      ) : (
+                        <span className="text-slate-400 shrink-0">No PDF</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
 }

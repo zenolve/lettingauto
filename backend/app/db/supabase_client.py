@@ -56,6 +56,7 @@ class TableNames:
     OFFERS = "offers"
     SENT_DOCUMENTS = "sent_documents"
     SENT_DOCUMENT_BODIES = "sent_document_bodies"
+    TENANCIES = "tenancies"
     PAYMENTS = "payments"
     AGENCIES = "agencies"
     AGENCY_USERS = "agency_users"

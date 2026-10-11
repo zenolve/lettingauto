@@ -183,18 +183,30 @@ def summarise(rec: dict) -> dict:
     }
 
 
-def _rows_for_property(property_id: str) -> list[dict]:
+def _rows_for_property(property_id: str) -> tuple[list[dict], Any]:
+    """The property's sent rows, and when its current tenancy cycle began."""
+    from app.services.tenancies import cycle_started_at  # noqa: PLC0415 — avoid load cycle
     try:
         prop = at.get(at.TableNames.PROPERTIES, property_id)
     except Exception:
-        return []
+        return [], None
+    f = prop.get("fields", {})
     rows: list[dict] = []
-    for rid in prop.get("fields", {}).get("Sent_Documents") or []:
+    for rid in f.get("Sent_Documents") or []:
         try:
             rows.append(at.get(at.TableNames.SENT_DOCUMENTS, rid))
         except Exception:
             continue
-    return rows
+    return rows, cycle_started_at(f)
+
+
+def _previous_tenancy(summary: dict, cycle_start: Any) -> bool:
+    """Sent during a tenancy a re-let has since archived. Take-on, compliance
+    and marketing documents (the landlord's terms of business, say) belong to
+    the property and stay current across a re-let."""
+    from app.services.tenancies import FIRST_TENANCY_STAGE, belongs_to_previous_tenancy  # noqa: PLC0415
+    return ((summary.get("stage") or 0) >= FIRST_TENANCY_STAGE
+            and belongs_to_previous_tenancy(summary.get("sent_at"), cycle_start))
 
 
 def list_for_property(property_id: str) -> list[dict]:
@@ -204,9 +216,12 @@ def list_for_property(property_id: str) -> list[dict]:
     prescribed pack are not editable documents)."""
     from app.services.document_library import get_document  # noqa: PLC0415 — avoid load cycle
 
-    rows = [summarise(r) for r in _rows_for_property(property_id)]
+    raw, cycle = _rows_for_property(property_id)
+    rows = [summarise(r) for r in raw]
     for r in rows:
         r["revisable"] = get_document(r["doc_id"] or "") is not None
+        # Shown under "Previous tenancies" rather than on the stage it was sent at.
+        r["previous_tenancy"] = _previous_tenancy(r, cycle)
     # Version breaks ties: two sends inside one clock tick still list newest first.
     rows.sort(key=lambda r: (r.get("sent_at") or r.get("submitted_date") or "", r["version"]), reverse=True)
     return rows
@@ -214,11 +229,13 @@ def list_for_property(property_id: str) -> list[dict]:
 
 def current_version(property_id: str, doc_id: str) -> Optional[dict]:
     """The latest send of ``doc_id`` on this property that nothing has
-    replaced yet - what a new send of the same document would revise."""
+    replaced yet - what a new send of the same document would revise. A send
+    from an archived tenancy is never offered: the next tenant's agreement is a
+    new document, not a revision of the last one."""
+    raw, cycle = _rows_for_property(property_id)
     heads = [
-        summarise(r) for r in _rows_for_property(property_id)
-        if r.get("fields", {}).get("Doc ID") == doc_id
-        and not r.get("fields", {}).get("Superseded At")
+        s for s in (summarise(r) for r in raw)
+        if s["doc_id"] == doc_id and not s["superseded_at"] and not _previous_tenancy(s, cycle)
     ]
     if not heads:
         return None

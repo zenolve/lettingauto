@@ -95,18 +95,24 @@ async def takeon_status(
     f = payment.get("fields", {})
 
     pay_status = f.get("status")
-    property_id = f.get("property_id")
 
     # Webhook may not have arrived yet — ask Stripe directly and fulfil here.
     if pay_status == "pending" and billing.verify_session_paid(payment):
-        property_id = await billing.mark_paid_and_fulfill(payment)
-        pay_status = "succeeded"
+        await billing.mark_paid_and_fulfill(payment)
+        f = at.get(at.TableNames.PAYMENTS, payment_id, fresh=True).get("fields", {})
+        pay_status = f.get("status") or "succeeded"
 
     meta = f.get("metadata") or {}
+    # A re-let intent names its property from the start, so "fulfilled" is the
+    # archived tenancy being recorded; a take-on is fulfilled once its property exists.
+    relet = meta.get("relet")
+    property_id = (relet or {}).get("property_id") or f.get("property_id")
+    fulfilled = bool(relet.get("tenancy_id")) if relet else bool(f.get("property_id"))
     return {
         "payment_id": payment_id,
+        "kind": "relet" if relet else "takeon",
         "status": pay_status,                       # pending | succeeded | cancelled | failed
-        "fulfilled": bool(property_id),
+        "fulfilled": fulfilled,
         "property_id": property_id,
         # While pending the agent can resume the same checkout (sessions stay
         # payable for ~24h) instead of re-entering the form.
@@ -116,34 +122,14 @@ async def takeon_status(
 
 
 def _derive_current_stage_for_check(property_id: str) -> int:
-    """Lightweight stage derivation for the stage-gate guard.
-
-    Mirrors `app.routers.properties._derive_current_stage` but inline to avoid
-    a circular import. Kept in sync by hand — see also frontend/src/lib/stages.ts.
-    """
+    """Current stage of a property for the stage-gate guards (404 if missing)."""
     from app.db import supabase_client as at  # local import — avoid load-time cycles
+    from app.services.stages import derive_stage  # noqa: PLC0415
     try:
         prop = at.get(at.TableNames.PROPERTIES, property_id)
     except Exception:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Property not found")
-    f = prop.get("fields", {})
-    tenant = bool(f.get("Tenant"))
-    if f.get("TA_LL_Signed") and f.get("TA_TT_Signed"):
-        return 8
-    if tenant and (f.get("TA_LL_Signed") or f.get("TA_TT_Signed")):
-        return 7
-    if tenant and f.get("LL_Offer_Accepted"):
-        return 6
-    if tenant:
-        return 5
-    if f.get("TC_Signed"):
-        return 4
-    certs_ok = all(f.get(k) in ("On File", "Agency Arranging") for k in ("Gas_Cert_Status", "EPC_Status", "EICR_Status"))
-    if certs_ok:
-        return 3
-    if bool(f.get("Landlords")) and any(f.get(k) for k in ("Gas_Cert_Status", "EPC_Status", "EICR_Status")):
-        return 2
-    return 1
+    return derive_stage(prop.get("fields", {}))
 
 
 def _require_stage(property_id: str, required: int, action: str) -> None:
@@ -241,7 +227,18 @@ async def submit_offer(
     _: Agent = Depends(require_agent),
 ) -> dict:
     _require_stage(property_id, required=4, action="Record offer")
+    _require_no_tenancy_in_progress(property_id, action="Record offer")
     return await handle_offer(property_id, payload)
+
+
+def _require_no_tenancy_in_progress(property_id: str, action: str) -> None:
+    """409 once a tenancy agreement is being signed or is live: a new offer
+    would inherit that tenancy's signatures, deposit and served records."""
+    from app.services.tenancies import TenancyStateError, ensure_no_tenancy_in_progress  # noqa: PLC0415
+    try:
+        ensure_no_tenancy_in_progress(property_id, action)
+    except TenancyStateError as e:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(e))
 
 
 @router.post("/tenant-pack/{property_id}")

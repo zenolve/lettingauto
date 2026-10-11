@@ -49,6 +49,12 @@ principal; the daily user is the lettings agent.
   agency submits the new-tenancy form, is sent to Stripe, and the tenancy
   records only materialise when the £50 clears. Abandoned checkouts cost
   nothing and create nothing.
+- **A re-let is a new tenancy.** When a tenancy ends, the agency can re-let
+  the same property without re-entering the landlord: the old tenancy is
+  archived and the property reopens at the Offer stage. That costs the same
+  £50, collected the same pay-first way — nothing is archived or cleared
+  until it clears. The landlord's signed terms of business carry over (they
+  cover later tenancies), so the landlord is not asked to sign again.
 
 ### Why this pricing shape (the rationale)
 
@@ -133,6 +139,8 @@ updated together:**
 | Settings → Billing card | `frontend/src/pages/Settings.tsx` |
 | Onboarding modal, slide 4 | `frontend/src/components/OnboardingModal.tsx` (reads the API value, copy mentions it) |
 | New-property form copy | `frontend/src/pages/forms/PropertyTakeon.tsx` |
+| Re-let action (stage 9) | `frontend/src/pages/PropertyDetail.tsx` → `TenancyEndedCard` (reads the API value) |
+| Payment landing page (take-on + re-let copy) | `frontend/src/pages/TakeonComplete.tsx` |
 | Login footer microcopy | `frontend/src/pages/Login.tsx` |
 | Landing pages (all 3 drafts) | `frontend/design-previews/{D_aurora_glass,E_bento_dark,F_editorial_mesh}.html` + `index.html` |
 | Operator docs | `docs/COMMERCIAL_SETUP.md`, `README.md` |
