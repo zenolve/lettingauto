@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { api } from "../../lib/api";
+import { api, fileUrl } from "../../lib/api";
 
 type UploadedFile = { filename: string; size: number; url: string };
 
@@ -148,7 +148,7 @@ export function FileUploader({ propertyId, bucket, label, hint, accept, multiple
         <ul className="mt-3 space-y-1 text-sm">
           {files.map((f) => (
             <li key={f.filename} className="flex justify-between gap-3 border-b last:border-0 border-slate-100 py-1">
-              <a href={f.url} target="_blank" rel="noreferrer" className="text-navy-600 hover:underline truncate">
+              <a href={fileUrl(f.url)} target="_blank" rel="noreferrer" className="text-navy-600 hover:underline truncate">
                 {/* Strip the timestamp_nonce_ prefix added by the backend storage layer */}
                 {f.filename.replace(/^\d{14}_[a-f0-9]{8}_/, "")}
               </a>

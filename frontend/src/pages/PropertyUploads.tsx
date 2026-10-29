@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 
 import { BackLink } from "../components/ui/BackLink";
-import { api } from "../lib/api";
+import { api, fileUrl } from "../lib/api";
 
 type Stored = {
   filename: string;
@@ -267,7 +267,7 @@ function BucketCard({
           {files.map((f) => (
             <li key={f.filename} className="py-2 flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <a href={f.url} target="_blank" rel="noreferrer"
+                <a href={fileUrl(f.url)} target="_blank" rel="noreferrer"
                   className="text-sm text-navy-600 hover:underline truncate block">
                   {prettyFilename(f.filename)}
                 </a>

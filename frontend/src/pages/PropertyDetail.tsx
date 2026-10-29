@@ -13,7 +13,7 @@ import { OffersPanel } from "../components/ui/OffersPanel";
 import { TenancyChecklist } from "../components/ui/TenancyChecklist";
 import { WarningsRecap } from "../components/ui/WarningsRecap";
 import { useAgency } from "../lib/agency";
-import { api, PropertyDetail as PD } from "../lib/api";
+import { api, fileUrl, PropertyDetail as PD } from "../lib/api";
 import { groupVersions, sentWhen } from "../lib/sentVersions";
 import { deriveCurrentStage, resolveViewStage, stageByOrder } from "../lib/stages";
 
@@ -120,14 +120,20 @@ export default function PropertyDetail() {
 // ---------------------------------------------------------------------------
 function RecordsEditor({ propertyId, data, refresh }: { propertyId: string; data: PD; refresh: () => void }) {
   type Kind = "property" | "landlord" | "tenant";
+  // Joint landlords / joint tenants each get their own button, so the open
+  // editor remembers which record it is on.
   const [which, setWhich] = useState<Kind | null>(null);
+  const [recordId, setRecordId] = useState<string | null>(null);
   const [catalog, setCatalog] = useState<FieldSpec[]>([]);
   const [err, setErr] = useState<string | null>(null);
 
-  const landlord = data.landlords?.[0];
-  const tenant = data.tenant;
+  const landlords = data.landlords ?? [];
+  const tenants = data.tenants ?? [];
+  const landlord = landlords.find((l) => l.id === recordId);
+  const tenant = tenants.find((t) => t.id === recordId);
 
-  async function open(kind: Kind) {
+  async function open(kind: Kind, id: string | null = null) {
+    setRecordId(id);
     setErr(null);
     try {
       if (kind === "property") {
@@ -173,16 +179,10 @@ function RecordsEditor({ propertyId, data, refresh }: { propertyId: string; data
         onClick={() => open("property")}>
         Property details
       </button>
-      <button className="px-3 py-1.5 rounded-md border border-cream-400 text-sm hover:bg-cream-100 transition disabled:opacity-40"
-        disabled={!landlord} title={landlord ? "" : "No landlord linked yet"}
-        onClick={() => open("landlord")}>
-        Landlord
-      </button>
-      <button className="px-3 py-1.5 rounded-md border border-cream-400 text-sm hover:bg-cream-100 transition disabled:opacity-40"
-        disabled={!tenant} title={tenant ? "" : "No tenant linked yet"}
-        onClick={() => open("tenant")}>
-        Tenant
-      </button>
+      <PartyButtons kind="Landlord" records={landlords} nameField="Full Name"
+        onOpen={(id) => open("landlord", id)} />
+      <PartyButtons kind="Tenant" records={tenants} nameField="Name"
+        onOpen={(id) => open("tenant", id)} />
       {err && <span className="text-xs text-rose-700">{err}</span>}
       <EntityEditDrawer
         title={which ? titles[which] : ""}
@@ -194,6 +194,31 @@ function RecordsEditor({ propertyId, data, refresh }: { propertyId: string; data
         onSave={save}
       />
     </section>
+  );
+}
+
+// One edit button per linked record: a single landlord/tenant keeps the plain
+// "Landlord" / "Tenant" label, joint ones are named so each can be reached.
+function PartyButtons({ kind, records, nameField, onOpen }: {
+  kind: string;
+  records: Array<Record<string, any>>;
+  nameField: string;
+  onOpen: (id: string) => void;
+}) {
+  const cls = "px-3 py-1.5 rounded-md border border-cream-400 text-sm hover:bg-cream-100 transition disabled:opacity-40";
+  if (records.length === 0) {
+    return (
+      <button className={cls} disabled title={`No ${kind.toLowerCase()} linked yet`}>{kind}</button>
+    );
+  }
+  return (
+    <>
+      {records.map((r) => (
+        <button key={r.id} className={cls} onClick={() => onOpen(r.id)}>
+          {records.length === 1 ? kind : `${kind} — ${r[nameField] ?? "unnamed"}`}
+        </button>
+      ))}
+    </>
   );
 }
 
@@ -400,7 +425,7 @@ function Stage3Marketing({ id, data, refresh }: { id: string; data: PD; refresh:
 
 function Stage4Offer({ id, data, current, refresh }: { id: string; data: PD; current: number; refresh: () => void }) {
   const f = data.fields;
-  const tenant = data.tenant;
+  const tenants = data.tenants ?? [];
   const offerLocked = current < 4;
   // HMO licence only matters when the offer flagged 3+ occupants. Show the
   // toggle then, plus anti-discrim (used by the APT stage-5 gate).
@@ -409,7 +434,7 @@ function Stage4Offer({ id, data, current, refresh }: { id: string; data: PD; cur
     <div className="grid md:grid-cols-2 gap-6">
       <PropertyCard f={f} compact />
       <LandlordCard landlords={data.landlords} compact />
-      {tenant ? <TenantCard tenant={tenant} /> : (
+      {tenants.length ? <TenantCard tenants={tenants} /> : (
         <NextStepCard
           title={offerLocked ? `Offer locked — property is at stage ${current}` : "Record an offer"}
           body={
@@ -595,6 +620,8 @@ function Stage8Live({ id, data, refresh }: { id: string; data: PD; refresh: () =
       <Card title="Tenancy">
         {data.tenant ? (
           <>
+            <KV k={data.tenants.length > 1 ? "Tenants" : "Tenant"}
+              v={data.tenants.map((t) => t["Name"] ?? "unnamed").join(", ")} />
             <KV k="Start date" v={data.tenant["Start Date"]} />
             <KV k="End date" v={data.tenant["End Date"] ?? "Periodic"} />
             <KV k="Monthly rent" v={data.tenant["Amount"] && `£${data.tenant["Amount"]}`} />
@@ -993,7 +1020,7 @@ function DocumentsSentOnStage({ propertyId, stage }: { propertyId: string; stage
                   </Link>
                 )}
                 {r.pdf_url ? (
-                  <a href={r.pdf_url} target="_blank" rel="noreferrer" className="btn-ghost text-navy-700 text-sm">View PDF →</a>
+                  <a href={fileUrl(r.pdf_url)} target="_blank" rel="noreferrer" className="btn-ghost text-navy-700 text-sm">View PDF →</a>
                 ) : (
                   <span className="text-xs text-slate-400">No PDF</span>
                 )}
@@ -1014,7 +1041,7 @@ function DocumentsSentOnStage({ propertyId, stage }: { propertyId: string; stage
                           : " · superseded"}
                       </span>
                       {e.pdf_url ? (
-                        <a href={e.pdf_url} target="_blank" rel="noreferrer" className="text-navy-700 hover:underline shrink-0">View PDF</a>
+                        <a href={fileUrl(e.pdf_url)} target="_blank" rel="noreferrer" className="text-navy-700 hover:underline shrink-0">View PDF</a>
                       ) : (
                         <span className="text-slate-400 shrink-0">No PDF</span>
                       )}
@@ -1138,11 +1165,19 @@ function LandlordCard({ landlords, compact = false }: { landlords: Array<Record<
   );
 }
 
-function TenantCard({ tenant }: { tenant: Record<string, any> }) {
+// Joint tenants are all listed; the tenancy terms are read from the lead
+// tenant's record, as everywhere else.
+function TenantCard({ tenants }: { tenants: Array<Record<string, any>> }) {
+  const tenant = tenants[0];
+  const joint = tenants.length > 1;
   return (
-    <Card title="Tenant">
-      <KV k="Name" v={tenant["Name"]} />
-      <KV k="Email" v={tenant["Tenant Email"]} />
+    <Card title={joint ? "Tenants" : "Tenant"}>
+      {tenants.map((t, i) => (
+        <div key={t.id} className="space-y-1">
+          <KV k={joint ? (i === 0 ? "Lead tenant" : "Joint tenant") : "Name"} v={t["Name"]} />
+          <KV k="Email" v={t["Tenant Email"]} />
+        </div>
+      ))}
       <KV k="Start date" v={tenant["Start Date"]} />
       <KV k="End date" v={tenant["End Date"] ?? "Periodic"} />
       <KV k="Monthly rent" v={tenant["Amount"] && `£${tenant["Amount"]}`} />
@@ -1184,7 +1219,7 @@ function UploadsCard({ propertyId }: { propertyId: string }) {
               <span className="text-slate-500">{bucket.replace(/_/g, " ")}:</span>{" "}
               {files.map((file: any, i: number) => (
                 <span key={file.filename}>
-                  <a href={file.url} target="_blank" rel="noreferrer" className="text-navy-600 hover:underline">
+                  <a href={fileUrl(file.url)} target="_blank" rel="noreferrer" className="text-navy-600 hover:underline">
                     {file.filename.replace(/^\d{14}_[a-f0-9]{8}_/, "")}
                   </a>
                   {i < files.length - 1 && ", "}
@@ -1299,7 +1334,7 @@ function PreviousTenancies({ propertyId, refreshKey }: { propertyId: string; ref
                         {d.status && d.status !== "Sent" ? ` · ${d.status.toLowerCase()}` : ""}
                       </span>
                       {d.pdf_url ? (
-                        <a href={d.pdf_url} target="_blank" rel="noreferrer" className="text-navy-700 hover:underline shrink-0">View PDF</a>
+                        <a href={fileUrl(d.pdf_url)} target="_blank" rel="noreferrer" className="text-navy-700 hover:underline shrink-0">View PDF</a>
                       ) : (
                         <span className="text-slate-400 shrink-0">No PDF</span>
                       )}

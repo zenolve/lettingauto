@@ -55,8 +55,9 @@ YesNo = Literal["Yes", "No"]
 class LandlordAdminInput(BaseModel):
     """PG_02 landlord admin form payload.
 
-    Fields ending in ``_upload`` are absolute URLs returned by the file-upload
-    endpoint ``POST /api/uploads/{property_id}/{bucket}?token=<form_token>``.
+    Fields ending in ``_upload`` are host-relative URLs (``/uploads/...``)
+    returned by the file-upload endpoint
+    ``POST /api/uploads/{property_id}/{bucket}?token=<form_token>``.
     The frontend uploads the file first, then submits this form with the
     returned URLs. (Tally storage links are no longer used.)
     """
@@ -204,7 +205,7 @@ class LandlordVerificationInput(BaseModel):
     """PG_02b landlord verification form payload.
 
     Fields ending in ``_upload`` (and ``visa_snapshot``,
-    ``certificate_of_incorporation``) are absolute URLs returned by the
+    ``certificate_of_incorporation``) are host-relative URLs returned by the
     file-upload endpoint — see ``LandlordAdminInput`` for the same convention.
     """
 
@@ -301,7 +302,7 @@ class OfferInput(BaseModel):
     is_student: bool = False
 
     # --- Right to Rent (steps 35–38) -----------------------------------
-    # All four are absolute URLs returned by the upload endpoint; the agent
+    # All four are host-relative URLs returned by the upload endpoint; the agent
     # uploads each through /api/uploads/agent/{property_id}/{bucket}.
     tenant_passport_upload: Optional[str] = None
     tenant_visa_upload: Optional[str] = None       # only if non-UK / time-limited

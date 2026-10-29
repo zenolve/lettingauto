@@ -566,19 +566,22 @@ def get_property(property_id: str, _: Agent = Depends(require_agent)) -> dict[st
         except Exception:
             pass
 
-    tenant = None
-    if fields.get("Tenant"):
+    # Every tenant on the accepted offer (joint tenancies), lead first.
+    # `tenant` stays as the lead for the views that read one set of tenancy
+    # terms.
+    tenants = []
+    for tid in fields.get("Tenant", []) or []:
         try:
-            tid = fields["Tenant"][0]
-            tenant = {"id": tid, **at.get(at.TableNames.TENANTS, tid).get("fields", {})}
+            tenants.append({"id": tid, **at.get(at.TableNames.TENANTS, tid).get("fields", {})})
         except Exception:
-            tenant = None
+            pass
 
     return {
         "id": prop["id"],
         "fields": fields,
         "landlords": landlords,
-        "tenant": tenant,
+        "tenants": tenants,
+        "tenant": tenants[0] if tenants else None,
     }
 
 

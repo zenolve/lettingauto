@@ -45,7 +45,7 @@ export default function LandlordVerification() {
   const [tokenError, setTokenError] = useState<string | null>(null);
 
   // Local upload state — mirrors the LandlordAdmin pattern. Each PublicUpload
-  // posts the file and bubbles back the absolute URL we then drop into the
+  // posts the file and bubbles back the URL we then drop into the
   // form payload at submit time.
   const [uploads, setUploads] = useState<Partial<Record<
     "id_document_upload" | "visa_snapshot" | "address_doc_upload"

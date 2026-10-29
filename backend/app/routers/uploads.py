@@ -105,13 +105,12 @@ def _ensure_dir(property_id: str, bucket: str) -> Path:
 
 
 def _public_url(property_id: str, bucket: str, filename: str) -> str:
-    # Absolute URL so Airtable URL-type fields accept it directly (Airtable
-    # rejects relative paths). Falls back to a relative path if app_base_url
-    # is not configured.
-    from app.config import settings  # noqa: PLC0415
-    base = (settings.app_base_url or "").rstrip("/")
-    rel = f"/uploads/{property_id}/{bucket}/{filename}"
-    return f"{base}{rel}" if base else rel
+    # Host-relative on purpose: the app is served same-origin behind nginx, so
+    # the link opens on whatever host the agent is using. An absolute URL baked
+    # in from APP_BASE_URL sent every live link to localhost when that was
+    # unset, and stored rows outlive host changes. The frontend's fileUrl()
+    # resolves these (and older absolute ones) against the API host.
+    return f"/uploads/{property_id}/{bucket}/{filename}"
 
 
 def _apply_cert_expiry(property_id: str, bucket: str, expiry: str | None) -> dict:

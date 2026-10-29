@@ -16,7 +16,7 @@ commercial changes to them.
 ## Commands
 
 ```bash
-# Backend tests (142 unit tests; APP_ENV=test disables cache + uses mock signer)
+# Backend tests (147 unit tests; APP_ENV=test disables cache + uses mock signer)
 cd backend && APP_ENV=test python -m pytest tests -q
 
 # End-to-end smoke vs a real DB (61 checks incl. multi-tenant isolation, import, versioning, re-let).

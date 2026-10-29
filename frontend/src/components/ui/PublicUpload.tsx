@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 
-import { publicApi } from "../../lib/api";
+import { fileUrl, publicApi } from "../../lib/api";
 
 type Props = {
   /** Form token from the URL — authorises the upload for this property only. */
@@ -13,7 +13,7 @@ type Props = {
   label: string;
   hint?: string;
   accept?: string;
-  /** Called with the absolute URL of the stored file (or undefined to clear). */
+  /** Called with the URL of the stored file (or undefined to clear). */
   onChange: (url: string | undefined) => void;
   /** Current value — if present, shown as a "✓ filename" badge instead of the dropzone. */
   value?: string;
@@ -23,9 +23,9 @@ type Props = {
  * Form-token-authorised file upload used by the public landlord pages
  * (admin / verification). Calls
  *   POST /api/uploads/{propertyId}/{bucket}?token={token}
- * and bubbles the returned absolute URL back to the parent form via onChange.
+ * and bubbles the returned URL back to the parent form via onChange.
  * The same URL is what the form payload eventually submits — and what
- * Airtable's URL-type fields store.
+ * the record fields store.
  */
 export function PublicUpload({ token, propertyId, bucket, label, hint, accept, onChange, value }: Props) {
   const [uploading, setUploading] = useState(false);
@@ -59,7 +59,7 @@ export function PublicUpload({ token, propertyId, bucket, label, hint, accept, o
       {value ? (
         <div className="flex items-center justify-between gap-2 border border-emerald-200 bg-emerald-50 rounded-md px-3 py-2">
           <span className="text-sm text-emerald-800 truncate">
-            <a href={value} target="_blank" rel="noreferrer" className="hover:underline">
+            <a href={fileUrl(value)} target="_blank" rel="noreferrer" className="hover:underline">
               {decodeURIComponent(value.split("/").pop() ?? "uploaded file").replace(/^\d{14}_[a-f0-9]{8}_/, "")}
             </a>
           </span>

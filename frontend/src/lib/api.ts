@@ -9,6 +9,16 @@ const baseURL = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? "http://l
 
 export const api = axios.create({ baseURL });
 
+// Stored files are served by the backend under /uploads. Their links are kept
+// host-relative, so resolve them against the API host (same origin in
+// production, the local backend in dev). Rows saved before that carry an
+// absolute URL - often http://localhost:8000 - so re-point those too.
+export function fileUrl(url: string): string {
+  const legacy = /^https?:\/\/[^/]+(\/uploads\/.*)$/.exec(url);
+  const path = legacy ? legacy[1] : url;
+  return path.startsWith("/uploads/") ? `${baseURL}${path}` : url;
+}
+
 api.interceptors.request.use((config) => {
   const token = getToken();
   if (token) {
@@ -61,6 +71,9 @@ export type PropertyDetail = {
   id: string;
   fields: Record<string, any>;
   landlords: Array<Record<string, any>>;
+  /** Every tenant on the accepted offer, lead first. */
+  tenants: Array<Record<string, any>>;
+  /** The lead tenant (tenants[0]). */
   tenant: Record<string, any> | null;
 };
 
